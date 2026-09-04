@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Item = {
-  id: string;
+  id: number;
   content: string;
   created_at: string;
 };
