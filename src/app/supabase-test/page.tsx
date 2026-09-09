@@ -31,8 +31,31 @@ export default function SupabaseTestPage() {
     setItems(data ?? []);
   }
 
+  // 화면이 처음 뜰 때 한 번만 불러온다.
+  // 화면을 벗어난 뒤에 응답이 도착하면 setState를 하지 않도록 cancelled로 막는다.
   useEffect(() => {
-    loadItems();
+    let cancelled = false;
+
+    async function loadOnMount() {
+      const { data, error } = await supabase
+        .from("items")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (cancelled) return;
+
+      if (error) {
+        setStatus(`불러오기 실패: ${error.message}`);
+        return;
+      }
+      setItems(data ?? []);
+    }
+
+    loadOnMount();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleSave() {
