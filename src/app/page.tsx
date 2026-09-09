@@ -1,81 +1,89 @@
-"use client";
+// 메인 화면 (차시 2)
+//
+// 계획서 3번 스케치의 첫 번째 화면을 그대로 옮긴 것이다.
+// 왼쪽에 진단 카드, 오른쪽에 해지 우선순위 목록.
+// 지금은 임시 데이터(MOCK_SUBSCRIPTIONS)로 배치만 확인하는 단계라
+// 버튼은 아직 아무 동작도 하지 않는다.
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-
-type Item = {
-  id: number;
-  content: string;
-  created_at: string;
-};
+import DiagnosisCard from "@/components/DiagnosisCard";
+import SubscriptionCard from "@/components/SubscriptionCard";
+import { MOCK_SUBSCRIPTIONS } from "@/data/mockSubscriptions";
+import { findService } from "@/data/services";
+import {
+  costPerUse,
+  maxSaving,
+  sortByCancelPriority,
+  totalMonthlyCost,
+} from "@/lib/analyze";
 
 export default function Home() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [content, setContent] = useState("");
-  const [status, setStatus] = useState("");
-
-  async function loadItems() {
-    const { data, error } = await supabase
-      .from("items")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      setStatus(`불러오기 실패: ${error.message}`);
-      return;
-    }
-    setItems(data ?? []);
-  }
-
-  useEffect(() => {
-    loadItems();
-  }, []);
-
-  async function handleSave() {
-    if (!content.trim()) return;
-    const { error } = await supabase.from("items").insert({ content });
-    if (error) {
-      setStatus(`저장 실패: ${error.message}`);
-      return;
-    }
-    setContent("");
-    setStatus("저장 완료");
-    loadItems();
-  }
+  const subscriptions = MOCK_SUBSCRIPTIONS;
+  const ranked = sortByCancelPriority(subscriptions);
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 bg-zinc-50 px-4 py-16 dark:bg-black">
-      <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
-        Supabase 저장·조회 테스트
-      </h1>
+    <main className="mx-auto w-full max-w-5xl px-5 py-10">
+      <h1 className="text-2xl font-bold text-ink">구독 습관 진단기</h1>
+      <p className="mt-1 text-sm text-ink-soft">
+        얼마나 쓰는지 기록하면, 끊어도 될 구독을 골라 드립니다.
+      </p>
 
-      <div className="flex w-full max-w-md gap-2">
-        <input
-          className="flex-1 rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="내용을 입력하세요"
-        />
-        <button
-          className="rounded bg-black px-4 py-2 text-white dark:bg-white dark:text-black"
-          onClick={handleSave}
-        >
-          저장
-        </button>
+      <div className="mt-8 grid gap-6 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start">
+        {/* 왼쪽: 진단 결과 + 월 단위 몰아 입력 버튼 */}
+        <div className="space-y-4">
+          <DiagnosisCard
+            // 습관 유형과 한 줄 진단은 차시 5에서 이용 기록으로 판정한다.
+            habitType="방치형"
+            oneLineDiagnosis="결제는 하지만 손은 잘 안 가요"
+            totalCost={totalMonthlyCost(subscriptions)}
+            saving={maxSaving(subscriptions)}
+          />
+
+          {/* 차시 4에서 '이번 달 이용 횟수 입력' 화면과 연결한다. */}
+          <button
+            type="button"
+            className="w-full rounded-2xl bg-diag-deep px-5 py-4 font-semibold text-diag-ink shadow-sm"
+          >
+            이번 달 이용 횟수 입력
+          </button>
+        </div>
+
+        {/* 오른쪽: 해지 우선순위 목록 */}
+        <div className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-semibold text-ink">해지 우선순위</h2>
+            <p className="text-xs text-ink-soft">1회당 비용이 비싼 순서</p>
+          </div>
+
+          <ul className="space-y-3">
+            {ranked.map((subscription, index) => (
+              <SubscriptionCard
+                key={subscription.id}
+                rank={index + 1}
+                serviceName={
+                  findService(subscription.serviceId)?.name ??
+                  subscription.serviceId
+                }
+                monthlyPrice={subscription.monthlyPrice}
+                usageCount={subscription.usageCount}
+                costPerUse={costPerUse(subscription)}
+              />
+            ))}
+          </ul>
+
+          {/* 차시 3에서 구독 등록 폼과 연결한다. */}
+          <button
+            type="button"
+            className="w-full rounded-2xl border-2 border-dashed border-list-deep px-5 py-4 font-semibold text-list-ink"
+          >
+            + 구독 추가
+          </button>
+        </div>
       </div>
 
-      {status && <p className="text-sm text-zinc-500">{status}</p>}
-
-      <ul className="w-full max-w-md space-y-2">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className="rounded border border-zinc-200 px-3 py-2 dark:border-zinc-800"
-          >
-            {item.content}
-          </li>
-        ))}
-      </ul>
-    </div>
+      <p className="mt-10 text-xs text-ink-soft">
+        ※ 차시 2 단계입니다. 화면 배치까지만 만들었고, 버튼 동작은 차시 3~4에서
+        연결합니다.
+      </p>
+    </main>
   );
 }
