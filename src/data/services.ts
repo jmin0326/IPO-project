@@ -105,9 +105,19 @@ export const SERVICES: Service[] = [
     weakness: "유튜브 영상 광고는 그대로 나옴",
   },
   {
+    id: "spotify",
+    name: "스포티파이",
+    category: "music",
+    // 프리미엄 개인 요금제. 오디오북이 빠진 '베이직'은 8,690원, 학생은 6,600원.
+    defaultPrice: 11990,
+    strength: "추천 알고리즘과 해외 음원이 강함",
+    weakness: "일부 국내 음원이 빠져 있음",
+  },
+  {
     id: "melon",
     name: "멜론",
     category: "music",
+    // 스트리밍 클럽 정기결제(PC+모바일). 모바일 전용은 7,590원.
     defaultPrice: 8690,
     strength: "국내 음원과 차트가 가장 충실함",
     weakness: "해외 음원과 추천 기능은 약한 편",
@@ -121,17 +131,10 @@ export const SERVICES: Service[] = [
     weakness: "백그라운드 재생과 유튜브 뮤직이 빠짐",
   },
   {
-    id: "spotify",
-    name: "스포티파이",
-    category: "music",
-    defaultPrice: 7900,
-    strength: "추천 알고리즘과 해외 음원이 강함",
-    weakness: "일부 국내 음원이 빠져 있음",
-  },
-  {
     id: "flo",
     name: "플로",
     category: "music",
+    // PC+모바일 무제한 정기결제. 모바일 전용은 6,900원.
     defaultPrice: 7900,
     strength: "SKT 결합 할인이 큼",
     weakness: "이용자가 적어 추천 데이터가 약함",
