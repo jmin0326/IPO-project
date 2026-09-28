@@ -16,14 +16,16 @@ import {
   sortByCancelPriority,
   totalMonthlyCost,
 } from "@/lib/analyze";
-import { currentMonthKey, formatMonthKey } from "@/lib/date";
+import { formatMonthKey, monthKeyOf } from "@/lib/date";
 import { won } from "@/lib/format";
 import { useAppData } from "@/lib/store";
+import { useToday } from "@/lib/today";
 import { useIsClient } from "@/lib/useIsClient";
 
 export default function DiagnosisPage() {
   const isClient = useIsClient();
   const data = useAppData();
+  const today = useToday();
 
   if (!isClient) {
     return (
@@ -33,7 +35,7 @@ export default function DiagnosisPage() {
     );
   }
 
-  const month = currentMonthKey();
+  const month = monthKeyOf(today);
   const stats = buildStats(data, month);
   const ranked = sortByCancelPriority(stats);
   const candidates = cancelCandidates(stats);

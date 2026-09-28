@@ -54,6 +54,13 @@ export function weekdayOf(dateKey: string): number {
   return new Date(year, month - 1, day).getDay();
 }
 
+/** 날짜 이동. shiftDay("2026-09-30", 1) -> "2026-10-01" */
+export function shiftDay(dateKey: string, delta: number): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  // Date는 31일 + 1 같은 계산을 알아서 다음 달로 넘겨 준다.
+  return toDateKey(new Date(year, month - 1, day + delta));
+}
+
 /** 달 이동. shiftMonth("2026-01", -1) -> "2025-12" */
 export function shiftMonth(monthKey: string, delta: number): string {
   const [year, month] = monthKey.split("-").map(Number);

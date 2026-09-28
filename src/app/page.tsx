@@ -27,11 +27,9 @@ import {
 } from "@/lib/analyze";
 import {
   billingDayInMonth,
-  currentMonthKey,
   formatDateKey,
   monthKeyOf,
   shiftMonth,
-  todayKey,
 } from "@/lib/date";
 import { won } from "@/lib/format";
 import {
@@ -40,12 +38,16 @@ import {
   toggleUsageLog,
   useAppData,
 } from "@/lib/store";
+import { useToday } from "@/lib/today";
 import { useIsClient } from "@/lib/useIsClient";
 
 export default function Home() {
   const isClient = useIsClient();
   const data = useAppData();
-  const [viewMonth, setViewMonth] = useState(() => currentMonthKey());
+  const today = useToday();
+  // 달력을 몇 달 옮겨 보고 있는지. 오늘 날짜를 바꾸면 달력도 같이 따라오도록
+  // 절대 월이 아니라 '오늘로부터 몇 달'로 들고 있는다.
+  const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   // 서버에서 미리 그릴 때는 오늘 날짜와 저장된 데이터를 알 수 없으므로
@@ -59,8 +61,8 @@ export default function Home() {
     );
   }
 
-  const today = todayKey();
-  const thisMonth = currentMonthKey();
+  const thisMonth = monthKeyOf(today);
+  const viewMonth = shiftMonth(thisMonth, monthOffset);
 
   const stats = buildStats(data, thisMonth);
   const ranked = sortByCancelPriority(stats);
@@ -145,7 +147,7 @@ export default function Home() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onChangeMonth={(delta) => {
-              setViewMonth(shiftMonth(viewMonth, delta));
+              setMonthOffset(monthOffset + delta);
               setSelectedDate(null);
             }}
           />

@@ -11,13 +11,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { serviceColor, serviceName } from "@/data/services";
 import { countUsage } from "@/lib/analyze";
-import { currentMonthKey, formatMonthKey } from "@/lib/date";
+import { formatMonthKey, monthKeyOf } from "@/lib/date";
 import { clearMonthlyCount, setMonthlyCount, useAppData } from "@/lib/store";
+import { useToday } from "@/lib/today";
 import { useIsClient } from "@/lib/useIsClient";
 
 export default function UsagePage() {
   const isClient = useIsClient();
   const data = useAppData();
+  const today = useToday();
   const router = useRouter();
 
   // 사용자가 고친 칸만 담아 둔다. 안 고친 칸은 항상 현재 데이터를 보여 준다.
@@ -31,7 +33,7 @@ export default function UsagePage() {
     );
   }
 
-  const month = currentMonthKey();
+  const month = monthKeyOf(today);
 
   function handleSave() {
     for (const subscription of data.subscriptions) {
