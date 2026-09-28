@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { won } from "@/lib/format";
 
 type Props = {
@@ -5,18 +6,31 @@ type Props = {
   oneLineDiagnosis: string;
   totalCost: number;
   saving: number;
+  candidateCount: number;
 };
 
-/** 메인 화면 왼쪽의 하늘색 진단 카드 (계획서 스케치 왼쪽 위) */
+/**
+ * 메인 화면 왼쪽의 하늘색 진단 카드.
+ *
+ * 카드 전체가 링크라서 누르면 상세 진단 화면으로 넘어간다.
+ * 여기서는 결론만 보여 주고, 그 숫자가 어떻게 나왔는지는 /diagnosis 에서 설명한다.
+ */
 export default function DiagnosisCard({
   habitType,
   oneLineDiagnosis,
   totalCost,
   saving,
+  candidateCount,
 }: Props) {
   return (
-    <section className="rounded-2xl bg-diag p-6 shadow-sm">
-      <p className="text-sm text-diag-ink/70">이번 달 진단</p>
+    <Link
+      href="/diagnosis"
+      className="block rounded-2xl bg-diag p-6 shadow-sm transition hover:bg-diag-deep"
+    >
+      <p className="flex items-center justify-between text-sm text-diag-ink/70">
+        이번 달 진단
+        <span className="font-semibold text-diag-ink">자세히 보기 ›</span>
+      </p>
 
       <p className="mt-2 text-2xl font-bold text-ink">
         당신은 <span className="text-diag-ink">&ldquo;{habitType}&rdquo;</span>
@@ -29,12 +43,17 @@ export default function DiagnosisCard({
           <dd className="text-xl font-semibold text-ink">{won(totalCost)}</dd>
         </div>
         <div className="flex items-baseline justify-between">
-          <dt className="text-sm text-ink-soft">절약 예상 최대</dt>
+          <dt className="text-sm text-ink-soft">
+            절약 예상 최대
+            {candidateCount > 0 && (
+              <span className="ml-1 text-xs">(해지 후보 {candidateCount}개)</span>
+            )}
+          </dt>
           <dd className="text-xl font-semibold text-diag-ink">
-            −{won(saving)}
+            {saving > 0 ? `−${won(saving)}` : won(0)}
           </dd>
         </div>
       </dl>
-    </section>
+    </Link>
   );
 }

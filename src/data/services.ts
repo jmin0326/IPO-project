@@ -12,6 +12,14 @@ export type CategoryId = "ott" | "music" | "commerce" | "cloud" | "ai" | "book";
 export type Category = {
   id: CategoryId;
   label: string;
+  /**
+   * 달력에서 이용 기록 점을 찍을 때 쓰는 색.
+   *
+   * 서비스마다 색을 정하지 않고 카테고리에만 색을 둔 이유:
+   * 서비스가 늘어날 때마다 색을 새로 고르면 결국 코드를 고쳐야 한다.
+   * 카테고리는 6개로 고정이니 여기에만 색을 두면 서비스는 계속 늘려도 된다.
+   */
+  color: string;
 };
 
 export type Service = {
@@ -28,12 +36,12 @@ export type Service = {
 };
 
 export const CATEGORIES: Category[] = [
-  { id: "ott", label: "영상 스트리밍" },
-  { id: "music", label: "음악" },
-  { id: "commerce", label: "쇼핑·배달 멤버십" },
-  { id: "cloud", label: "클라우드 저장" },
-  { id: "ai", label: "AI·생산성" },
-  { id: "book", label: "독서" },
+  { id: "ott", label: "영상 스트리밍", color: "#d9534f" },
+  { id: "music", label: "음악", color: "#4a7fd4" },
+  { id: "commerce", label: "쇼핑·배달 멤버십", color: "#dd8534" },
+  { id: "cloud", label: "클라우드 저장", color: "#2f9c96" },
+  { id: "ai", label: "AI·생산성", color: "#7f5fc9" },
+  { id: "book", label: "독서", color: "#48924f" },
 ];
 
 export const SERVICES: Service[] = [
@@ -229,4 +237,20 @@ export function findService(id: string): Service | undefined {
 /** 카테고리 id로 이름 얻기 (예: "ott" -> "영상 스트리밍") */
 export function categoryLabel(id: CategoryId): string {
   return CATEGORIES.find((category) => category.id === id)?.label ?? id;
+}
+
+/** 카테고리 id로 색 얻기. 모르는 카테고리면 회색. */
+export function categoryColor(id: CategoryId): string {
+  return CATEGORIES.find((category) => category.id === id)?.color ?? "#9aa0a6";
+}
+
+/** 서비스 id로 바로 색을 얻는다. (달력 점 색) */
+export function serviceColor(serviceId: string): string {
+  const service = findService(serviceId);
+  return service ? categoryColor(service.category) : "#9aa0a6";
+}
+
+/** 서비스 id로 이름을 얻는다. 목록에 없는 id면 id를 그대로 보여 준다. */
+export function serviceName(serviceId: string): string {
+  return findService(serviceId)?.name ?? serviceId;
 }
