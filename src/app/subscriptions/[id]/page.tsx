@@ -1,27 +1,31 @@
 "use client";
 
-// 구독 상세 화면 (계획서 스케치 4번 화면).
+// 구독 상세 화면 (계획서 스케치 4번 화면을 넓힌 것).
 //
-// 메인 화면 오른쪽 목록에서 구독을 누르면 여기로 온다.
-//  - 이 구독 하나에 대한 진단 (1회당 비용, 해지 추천 순위)
-//  - 요일별 이용 패턴 막대그래프
-//  - 같은 카테고리에서 더 싼 대체 서비스 추천
-//  - 해지하기 / 계속 유지 / 서비스 변경
+//  - 이 구독 하나에 대한 진단 (이용 강도, 1회당 비용)
+//  - 요일별 이용 패턴
+//  - 추천 (해지 / 요금제 낮추기 / 올리기 / 갈아타기) — 버튼을 누르면 실제로 적용된다
+//  - 이 서비스의 요금제 사다리 전체
 
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import SuggestionBadge from "@/components/SuggestionBadge";
 import WeekdayChart from "@/components/WeekdayChart";
-import { categoryLabel } from "@/data/services";
+import { categoryLabel, findPlan } from "@/data/services";
 import {
+  INTENSITY_LABELS,
+  INTENSITY_LIMITS,
   buildStats,
-  findAlternatives,
-  sortByCancelPriority,
+  sortByPriority,
   weekdayCounts,
+  weekdayMinutes,
+  type Suggestion,
 } from "@/lib/analyze";
 import { formatMonthKey, monthKeyOf } from "@/lib/date";
 import { particle, won } from "@/lib/format";
 import {
+  changeSubscriptionPlan,
   changeSubscriptionService,
   removeSubscription,
   useAppData,
@@ -36,7 +40,6 @@ export default function SubscriptionDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
 
-  const [pickedServiceId, setPickedServiceId] = useState<string | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   if (!isClient) {
@@ -48,8 +51,7 @@ export default function SubscriptionDetailPage() {
   }
 
   const month = monthKeyOf(today);
-  const stats = buildStats(data, month);
-  const ranked = sortByCancelPriority(stats);
+  const ranked = sortByPriority(buildStats(data, month));
 
   const index = ranked.findIndex((item) => item.subscription.id === params.id);
   const stat = index >= 0 ? ranked[index] : undefined;
@@ -67,25 +69,35 @@ export default function SubscriptionDetailPage() {
     );
   }
 
-  const { subscription, name, color, service, usageCount, costPerUse } = stat;
-  const alternatives = findAlternatives(
-    subscription.serviceId,
-    subscription.monthlyPrice,
-  );
-  const picked = alternatives.find((item) => item.service.id === pickedServiceId);
+  const { subscription, name, planName, color, service, plan, usageCount } = stat;
 
-  function handleCancel() {
-    removeSubscription(subscription.id);
+  const minutesByWeekday = weekdayMinutes(data, subscription.id);
+  const hasMinutes = minutesByWeekday.some((value) => value > 0);
+  const chartValues = hasMinutes
+    ? minutesByWeekday
+    : weekdayCounts(data, subscription.id);
+
+  function applySuggestion(suggestion: Suggestion) {
+    if (!suggestion.targetServiceId || !suggestion.targetPlanId) return;
+
+    const target = findPlan(suggestion.targetServiceId, suggestion.targetPlanId);
+    if (!target) return;
+
+    if (suggestion.targetServiceId === subscription.serviceId) {
+      changeSubscriptionPlan(subscription.id, target.id, target.price);
+    } else {
+      changeSubscriptionService(
+        subscription.id,
+        suggestion.targetServiceId,
+        target.id,
+        target.price,
+      );
+    }
     router.push("/");
   }
 
-  function handleChange() {
-    if (!picked) return;
-    changeSubscriptionService(
-      subscription.id,
-      picked.service.id,
-      picked.service.defaultPrice,
-    );
+  function handleCancel() {
+    removeSubscription(subscription.id);
     router.push("/");
   }
 
@@ -95,101 +107,199 @@ export default function SubscriptionDetailPage() {
         ‹ 돌아가기
       </Link>
 
-      <h1 className="mt-3 flex items-center gap-2 text-2xl font-bold text-ink">
+      <h1 className="mt-3 flex flex-wrap items-center gap-2 text-2xl font-bold text-ink">
         <span className="size-3 rounded-full" style={{ backgroundColor: color }} />
         {name}
+        <span className="text-base font-normal text-ink-soft">{planName}</span>
       </h1>
       {service && (
-        <p className="mt-1 text-sm text-ink-soft">{categoryLabel(service.category)}</p>
+        <p className="mt-1 text-sm text-ink-soft">
+          {categoryLabel(service.category)}
+        </p>
       )}
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 md:items-start">
         {/* 이 구독 하나에 대한 진단 */}
         <section className="rounded-2xl bg-diag p-6 shadow-sm">
           <p className="text-2xl font-bold text-ink">
-            {costPerUse === null ? "이번 달 이용 없음" : `1회당 ${won(costPerUse)}`}
+            {INTENSITY_LABELS[stat.intensity]}
           </p>
           <p className="mt-1 font-semibold text-diag-ink">
-            해지 추천 {index + 1}순위
+            손볼 순위 {index + 1}번째
           </p>
-          <p className="mt-4 text-sm text-ink-soft">
-            월 {won(subscription.monthlyPrice)} / {formatMonthKey(month)}에{" "}
-            {usageCount}회 사용
-          </p>
-          <p className="mt-1 text-sm text-ink-soft">
-            매월 {subscription.billingDay}일 결제
-          </p>
-          <p className="mt-4 rounded-lg bg-white px-3 py-2 text-sm text-ink">
-            {stat.reason}
-          </p>
+
+          <dl className="mt-4 space-y-1 text-sm text-ink-soft">
+            <div className="flex justify-between">
+              <dt>월 요금</dt>
+              <dd className="text-ink">{won(subscription.monthlyPrice)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>{formatMonthKey(month)} 이용</dt>
+              <dd className="text-ink">{usageCount}회</dd>
+            </div>
+            {stat.costPerUse !== null && (
+              <div className="flex justify-between">
+                <dt>1회당</dt>
+                <dd className="text-ink">{won(stat.costPerUse)}</dd>
+              </div>
+            )}
+            {stat.averageMinutes !== null && (
+              <div className="flex justify-between">
+                <dt>한 번에 평균</dt>
+                <dd className="text-ink">{stat.averageMinutes}분</dd>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <dt>결제일</dt>
+              <dd className="text-ink">매월 {subscription.billingDay}일</dd>
+            </div>
+          </dl>
+
+          {service && (
+            <p className="mt-4 rounded-lg bg-white px-3 py-2 text-xs leading-relaxed text-ink-soft">
+              {categoryLabel(service.category)}는 한 달{" "}
+              {INTENSITY_LIMITS[service.category].low + 1}~
+              {INTENSITY_LIMITS[service.category].medium}번이면 &lsquo;적당히&rsquo;,{" "}
+              {INTENSITY_LIMITS[service.category].medium + 1}번부터
+              &lsquo;자주&rsquo;로 봅니다. {INTENSITY_LIMITS[service.category].note}.
+            </p>
+          )}
         </section>
 
         {/* 요일별 이용 패턴 */}
         <section className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="font-semibold text-ink">요일별 이용 횟수</h2>
+          <h2 className="font-semibold text-ink">
+            요일별 이용 {hasMinutes ? "시간" : "횟수"}
+          </h2>
           <p className="mt-1 mb-3 text-xs text-ink-soft">
             지금까지 남긴 기록 전체 기준입니다.
+            {!hasMinutes && " 이용 시간을 적으면 시간으로 바뀝니다."}
           </p>
-          <WeekdayChart counts={weekdayCounts(data, subscription.id)} />
+          <WeekdayChart
+            values={chartValues}
+            unit={hasMinutes ? "minutes" : "count"}
+          />
         </section>
       </div>
 
-      {/* 대체 서비스 추천 */}
+      {/* 추천 */}
       <section className="mt-5 rounded-2xl bg-white p-6 shadow-sm">
-        <h2 className="font-semibold text-ink">대체 서비스 추천</h2>
+        <h2 className="font-semibold text-ink">추천</h2>
         <p className="mt-1 mb-4 text-xs leading-relaxed text-ink-soft">
-          같은 카테고리에서 지금보다 싼 서비스입니다. 절약액은 조사해 둔 기본 요금으로
-          계산했기 때문에, 할인받아 쓰고 있다면 실제로는 이보다 덜 아낄 수 있습니다.
+          이용 강도에 맞춰 고른 것입니다. 버튼을 누르면 바로 적용되고, 지금까지 쌓인
+          이용 기록은 그대로 남습니다.
         </p>
 
-        {alternatives.length === 0 ? (
-          <p className="text-sm text-ink-soft">
-            같은 카테고리에 지금보다 싼 서비스가 없습니다. 요금 자체는 이미 싼 편입니다.
-          </p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {alternatives.map((alternative) => {
-              const isPicked = alternative.service.id === pickedServiceId;
-              return (
+        <ul className="space-y-3">
+          {stat.suggestions.map((suggestion, order) => (
+            <li
+              key={`${suggestion.kind}-${suggestion.targetPlanId ?? order}`}
+              className={`rounded-xl p-4 ${
+                order === 0 ? "bg-diag" : "bg-page"
+              }`}
+            >
+              <p className="flex flex-wrap items-center gap-2">
+                <SuggestionBadge kind={suggestion.kind} />
+                <span className="font-semibold text-ink">{suggestion.title}</span>
+                {suggestion.saving > 0 && (
+                  <strong className="text-list-ink">
+                    매달 {won(suggestion.saving)} 절약
+                  </strong>
+                )}
+                {suggestion.saving < 0 && (
+                  <span className="text-ink-soft">
+                    매달 {won(-suggestion.saving)} 더 냄
+                  </span>
+                )}
+              </p>
+
+              <p className="mt-2 text-sm text-ink-soft">{suggestion.reason}</p>
+              {suggestion.tradeoff && (
+                <p className="mt-1 text-sm text-list-ink">
+                  감안할 점: {suggestion.tradeoff}
+                </p>
+              )}
+
+              {suggestion.targetPlanId && (
                 <button
-                  key={alternative.service.id}
                   type="button"
-                  onClick={() =>
-                    setPickedServiceId(isPicked ? null : alternative.service.id)
-                  }
-                  className={`rounded-xl border-2 p-4 text-left transition ${
-                    isPicked
-                      ? "border-diag-deep bg-diag"
-                      : "border-transparent bg-page hover:border-diag-deep"
-                  }`}
+                  onClick={() => applySuggestion(suggestion)}
+                  className="mt-3 rounded-lg bg-diag-deep px-4 py-2 text-sm font-semibold text-diag-ink"
                 >
-                  <p className="font-semibold text-ink">
-                    {alternative.service.name}
-                    {isPicked && (
-                      <span className="ml-1 text-sm text-diag-ink">선택됨 ✓</span>
-                    )}
-                  </p>
-                  <p className="mt-1 text-sm text-ink">
-                    {won(alternative.service.defaultPrice)} → 매달{" "}
-                    <strong>{won(alternative.saving)} 절약</strong>
-                  </p>
-                  <p className="mt-2 text-xs text-ink-soft">
-                    좋은 점: {alternative.service.strength}
-                  </p>
-                  <p className="mt-0.5 text-xs text-list-ink">
-                    감안할 점: {alternative.service.weakness}
-                  </p>
+                  이대로 바꾸기
                 </button>
-              );
-            })}
-          </div>
-        )}
+              )}
+
+              {suggestion.kind === "cancel" && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingCancel(true)}
+                  className="mt-3 rounded-lg bg-list-deep px-4 py-2 text-sm font-semibold text-list-ink"
+                >
+                  해지하기
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       </section>
 
+      {/* 이 서비스의 요금제 전체 */}
+      {service && service.plans.length > 1 && (
+        <section className="mt-5 rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="font-semibold text-ink">{name}의 요금제</h2>
+          <p className="mt-1 mb-4 text-xs text-ink-soft">
+            지금 쓰는 요금제는 파란 줄입니다.
+          </p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-md text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 text-left text-ink-soft">
+                  <th className="py-2 font-medium">요금제</th>
+                  <th className="py-2 text-right font-medium">월 요금</th>
+                  <th className="py-2 text-center font-medium">광고</th>
+                  <th className="py-2 font-medium">화질·음질</th>
+                  <th className="py-2 text-center font-medium">동시</th>
+                </tr>
+              </thead>
+              <tbody>
+                {service.plans.map((item) => {
+                  const isCurrent = item.id === plan?.id;
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`border-b border-zinc-100 ${
+                        isCurrent ? "bg-diag font-semibold" : ""
+                      }`}
+                    >
+                      <td className="py-2 text-ink">
+                        {item.name}
+                        {isCurrent && (
+                          <span className="ml-1 text-xs text-diag-ink">지금</span>
+                        )}
+                      </td>
+                      <td className="py-2 text-right text-ink">{won(item.price)}</td>
+                      <td className="py-2 text-center text-ink-soft">
+                        {item.ads ? "있음" : "없음"}
+                      </td>
+                      <td className="py-2 text-ink-soft">{item.quality ?? "—"}</td>
+                      <td className="py-2 text-center text-ink-soft">
+                        {item.devices ? `${item.devices}대` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {/* 결정 버튼 */}
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="mt-5">
         {confirmingCancel ? (
-          <div className="rounded-xl bg-list p-3 text-center sm:col-span-3">
+          <div className="rounded-xl bg-list p-4 text-center">
             <p className="text-sm text-list-ink">
               정말 목록에서 지울까요? {name} 이용 기록도 같이 지워집니다.
             </p>
@@ -211,7 +321,7 @@ export default function SubscriptionDetailPage() {
             </div>
           </div>
         ) : (
-          <>
+          <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setConfirmingCancel(true)}
@@ -219,42 +329,21 @@ export default function SubscriptionDetailPage() {
             >
               해지하기
             </button>
-
             <Link
               href="/"
               className="rounded-xl bg-page px-5 py-3 text-center font-semibold text-ink-soft"
             >
-              계속 유지
+              그대로 두고 나가기
             </Link>
-
-            <button
-              type="button"
-              onClick={handleChange}
-              disabled={!picked}
-              className="rounded-xl bg-diag-deep px-5 py-3 font-semibold text-diag-ink disabled:bg-page disabled:text-ink-soft"
-            >
-              {picked
-                ? `${picked.service.name}${particle(picked.service.name, "으로", "로")} 변경`
-                : "서비스 변경"}
-            </button>
-          </>
+          </div>
         )}
       </div>
 
-      {!confirmingCancel && (
-        <p className="mt-3 text-xs text-ink-soft">
-          {picked ? (
-            <>
-              ※ {picked.service.name}
-              {particle(picked.service.name, "으로", "로")} 바꾸면 매달{" "}
-              {won(picked.saving)}을 아낍니다. 지금까지 쌓인 이용 기록은 그대로
-              남습니다.
-            </>
-          ) : (
-            <>
-              ※ &apos;서비스 변경&apos;은 위에서 대체 서비스를 고르면 눌립니다.
-            </>
-          )}
+      {service?.reachNote && (
+        <p className="mt-4 text-xs text-ink-soft">
+          ※ {name}
+          {particle(name, "은", "는")} {service.reachNote}. 갈아타기 추천은 이
+          숫자를 근거로 합니다.
         </p>
       )}
     </main>

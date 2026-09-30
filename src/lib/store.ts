@@ -11,7 +11,9 @@ import { useSyncExternalStore } from "react";
 import { SEED_DATA } from "@/data/seed";
 import type { AppData, MonthlyCount, Subscription, UsageLog } from "./types";
 
-const STORAGE_KEY = "subscription-habit-v1";
+// 요금제(planId)와 이용 시간(minutes)이 생기면서 데이터 모양이 바뀌었다.
+// 예전 모양으로 저장된 값을 그대로 읽으면 화면이 깨지므로 칸 이름을 v2로 올린다.
+const STORAGE_KEY = "subscription-habit-v2";
 
 /** 지금 들고 있는 데이터. 이 파일 밖에서는 직접 못 건드린다. */
 let state: AppData = SEED_DATA;
@@ -86,22 +88,39 @@ export function addSubscription(input: Omit<Subscription, "id">) {
   setData({ ...state, subscriptions: [...state.subscriptions, subscription] });
 }
 
-/**
- * 같은 구독을 다른 서비스로 갈아탄다. (상세 화면의 '서비스 변경')
- *
- * 이용 기록은 그대로 둔다. 사람이 하던 일(영상 보기)은 그대로고 수단만 바뀐 것이라,
- * 지금까지 쌓인 이용 패턴은 그대로 두는 편이 맞다고 봤다.
- */
-export function changeSubscriptionService(
+/** 같은 서비스 안에서 요금제만 바꾼다. (상세 화면의 '요금제 낮추기/올리기') */
+export function changeSubscriptionPlan(
   subscriptionId: string,
-  serviceId: string,
+  planId: string,
   monthlyPrice: number,
 ) {
   setData({
     ...state,
     subscriptions: state.subscriptions.map((subscription) =>
       subscription.id === subscriptionId
-        ? { ...subscription, serviceId, monthlyPrice }
+        ? { ...subscription, planId, monthlyPrice }
+        : subscription,
+    ),
+  });
+}
+
+/**
+ * 같은 구독을 다른 서비스로 갈아탄다. (상세 화면의 '서비스 변경')
+ *
+ * 이용 기록은 그대로 둔다. 사람이 하던 일(영상 보기)은 그대로고 수단만 바뀐 것이라,
+ * 지금까지 쌓인 이용 패턴은 살리는 편이 맞다고 봤다.
+ */
+export function changeSubscriptionService(
+  subscriptionId: string,
+  serviceId: string,
+  planId: string,
+  monthlyPrice: number,
+) {
+  setData({
+    ...state,
+    subscriptions: state.subscriptions.map((subscription) =>
+      subscription.id === subscriptionId
+        ? { ...subscription, serviceId, planId, monthlyPrice }
         : subscription,
     ),
   });
@@ -121,13 +140,13 @@ export function removeSubscription(subscriptionId: string) {
 // ---- 이용 기록 ----
 
 /** 같은 날 같은 구독을 여러 번 눌러도 기록은 하루에 하나만 남긴다. */
-export function addUsageLog(subscriptionId: string, date: string) {
+export function addUsageLog(subscriptionId: string, date: string, minutes = 0) {
   const already = state.usageLogs.some(
     (log) => log.subscriptionId === subscriptionId && log.date === date,
   );
   if (already) return;
 
-  const log: UsageLog = { id: newId("log"), subscriptionId, date };
+  const log: UsageLog = { id: newId("log"), subscriptionId, date, minutes };
   setData({ ...state, usageLogs: [...state.usageLogs, log] });
 }
 
@@ -145,6 +164,30 @@ export function toggleUsageLog(subscriptionId: string, date: string) {
   } else {
     addUsageLog(subscriptionId, date);
   }
+}
+
+/** 그날 몇 분 썼는지 적는다. 기록이 없으면 만들어 준다. */
+export function setUsageMinutes(
+  subscriptionId: string,
+  date: string,
+  minutes: number,
+) {
+  const safeMinutes = Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes) : 0;
+  const found = state.usageLogs.find(
+    (log) => log.subscriptionId === subscriptionId && log.date === date,
+  );
+
+  if (!found) {
+    addUsageLog(subscriptionId, date, safeMinutes);
+    return;
+  }
+
+  setData({
+    ...state,
+    usageLogs: state.usageLogs.map((log) =>
+      log.id === found.id ? { ...log, minutes: safeMinutes } : log,
+    ),
+  });
 }
 
 // ---- 월 단위 몰아 입력 ----

@@ -2,9 +2,8 @@
 
 // 메인 화면.
 //
-// 계획서 스케치의 첫 화면에 달력을 더한 구성이다.
 //  - 왼쪽: 진단 카드(누르면 상세 진단으로) + 달력 + 고른 날짜 패널
-//  - 오른쪽: 해지 우선순위 목록
+//  - 오른쪽: 전체 점검(중복·묶음·몰림) + 추천 목록
 //
 // 진단은 항상 '이번 달' 기준으로 계산한다. 달력은 지난달도 넘겨 볼 수 있지만,
 // 달력을 넘긴다고 진단까지 바뀌면 헷갈리므로 둘을 일부러 분리했다.
@@ -16,13 +15,16 @@ import Calendar, {
   type CalendarUsage,
 } from "@/components/Calendar";
 import DiagnosisCard from "@/components/DiagnosisCard";
+import PortfolioNotices from "@/components/PortfolioNotices";
 import SubscriptionCard from "@/components/SubscriptionCard";
 import { CATEGORIES, findService, serviceColor, serviceName } from "@/data/services";
 import {
   buildStats,
-  cancelCandidates,
+  findPortfolioIssues,
   judgeHabit,
-  sortByCancelPriority,
+  maxSaving,
+  savingSuggestions,
+  sortByPriority,
   totalMonthlyCost,
 } from "@/lib/analyze";
 import {
@@ -33,8 +35,9 @@ import {
 } from "@/lib/date";
 import { won } from "@/lib/format";
 import {
-  removeSubscription,
+  removeUsageLog,
   resetToSeed,
+  setUsageMinutes,
   toggleUsageLog,
   useAppData,
 } from "@/lib/store";
@@ -65,9 +68,9 @@ export default function Home() {
   const viewMonth = shiftMonth(thisMonth, monthOffset);
 
   const stats = buildStats(data, thisMonth);
-  const ranked = sortByCancelPriority(stats);
+  const ranked = sortByPriority(stats);
   const habit = judgeHabit(stats);
-  const candidates = cancelCandidates(stats);
+  const issues = findPortfolioIssues(data, stats);
 
   // 달력에 찍을 이용 기록 (보고 있는 달만)
   const usageByDate = new Map<string, CalendarUsage[]>();
@@ -115,7 +118,7 @@ export default function Home() {
     <main className="mx-auto w-full max-w-5xl px-5 py-10">
       <h1 className="text-2xl font-bold text-ink">구독 습관 진단기</h1>
       <p className="mt-1 text-sm text-ink-soft">
-        얼마나 쓰는지 기록하면, 끊어도 될 구독을 골라 드립니다.
+        얼마나 쓰는지 기록하면, 끊을지 낮출지 바꿀지 골라 드립니다.
       </p>
 
       <div className="mt-8 grid gap-6 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:items-start">
@@ -125,11 +128,8 @@ export default function Home() {
             habitType={habit.type}
             oneLineDiagnosis={habit.oneLine}
             totalCost={totalMonthlyCost(stats)}
-            saving={candidates.reduce(
-              (sum, stat) => sum + stat.subscription.monthlyPrice,
-              0,
-            )}
-            candidateCount={candidates.length}
+            saving={maxSaving(stats)}
+            fixCount={savingSuggestions(stats).length}
           />
 
           <Link
@@ -198,89 +198,126 @@ export default function Home() {
               )}
 
               {data.subscriptions.length === 0 ? (
-                <p className="mt-3 text-sm text-ink-soft">
-                  등록된 구독이 없습니다.
-                </p>
+                <p className="mt-3 text-sm text-ink-soft">등록된 구독이 없습니다.</p>
               ) : (
                 <>
                   <p className="mt-3 text-xs text-ink-soft">
-                    이 날 이용한 서비스를 눌러 주세요. 다시 누르면 취소됩니다.
+                    이 날 쓴 서비스를 켜고, 몇 분 썼는지 적어 주세요. 시간은 비워 둬도
+                    됩니다.
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
+
+                  <ul className="mt-2 space-y-1.5">
                     {data.subscriptions.map((subscription) => {
-                      const used = data.usageLogs.some(
-                        (log) =>
-                          log.subscriptionId === subscription.id &&
-                          log.date === selectedDate,
+                      const log = data.usageLogs.find(
+                        (item) =>
+                          item.subscriptionId === subscription.id &&
+                          item.date === selectedDate,
                       );
+
                       return (
-                        <button
+                        <li
                           key={subscription.id}
-                          type="button"
-                          onClick={() =>
-                            toggleUsageLog(subscription.id, selectedDate)
-                          }
-                          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition ${
-                            used
-                              ? "border-transparent bg-diag font-semibold text-diag-ink"
-                              : "border-zinc-200 bg-white text-ink-soft"
-                          }`}
+                          className="flex items-center gap-2"
                         >
-                          <span
-                            className="size-1.5 rounded-full"
-                            style={{
-                              backgroundColor: serviceColor(subscription.serviceId),
-                            }}
-                          />
-                          {serviceName(subscription.serviceId)}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleUsageLog(subscription.id, selectedDate)
+                            }
+                            className={`flex flex-1 items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-sm transition ${
+                              log
+                                ? "border-transparent bg-diag font-semibold text-diag-ink"
+                                : "border-zinc-200 bg-white text-ink-soft"
+                            }`}
+                          >
+                            <span
+                              className="size-1.5 shrink-0 rounded-full"
+                              style={{
+                                backgroundColor: serviceColor(subscription.serviceId),
+                              }}
+                            />
+                            {serviceName(subscription.serviceId)}
+                          </button>
+
+                          {log && (
+                            <span className="flex shrink-0 items-baseline gap-1">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={0}
+                                value={log.minutes || ""}
+                                placeholder="0"
+                                onChange={(event) =>
+                                  setUsageMinutes(
+                                    subscription.id,
+                                    selectedDate,
+                                    Number(event.target.value),
+                                  )
+                                }
+                                className="w-16 rounded-lg bg-page px-2 py-1 text-right text-sm text-ink outline-none"
+                              />
+                              <span className="text-xs text-ink-soft">분</span>
+                              <button
+                                type="button"
+                                onClick={() => removeUsageLog(log.id)}
+                                aria-label="이 기록 지우기"
+                                className="px-1 text-xs text-ink-soft"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          )}
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 </>
               )}
             </section>
           )}
         </div>
 
-        {/* 오른쪽: 해지 우선순위 목록 */}
-        <div className="space-y-3">
-          <div className="flex items-baseline justify-between">
-            <h2 className="font-semibold text-ink">해지 우선순위</h2>
-            <p className="text-xs text-ink-soft">1회당 비용이 비싼 순서</p>
+        {/* 오른쪽: 전체 점검 + 추천 목록 */}
+        <div className="space-y-6">
+          <PortfolioNotices issues={issues} />
+
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between">
+              <h2 className="font-semibold text-ink">구독별 추천</h2>
+              <p className="text-xs text-ink-soft">손볼 게 큰 순서</p>
+            </div>
+
+            {ranked.length === 0 ? (
+              <p className="rounded-2xl bg-white p-6 text-sm text-ink-soft shadow-sm">
+                아직 등록한 구독이 없습니다. 아래에서 구독을 추가해 주세요.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {ranked.map((stat, index) => (
+                  <SubscriptionCard
+                    key={stat.subscription.id}
+                    rank={index + 1}
+                    stat={stat}
+                    usedToday={data.usageLogs.some(
+                      (log) =>
+                        log.subscriptionId === stat.subscription.id &&
+                        log.date === today,
+                    )}
+                    onToggleToday={() =>
+                      toggleUsageLog(stat.subscription.id, today)
+                    }
+                  />
+                ))}
+              </ul>
+            )}
+
+            <Link
+              href="/subscriptions/new"
+              className="block w-full rounded-2xl border-2 border-dashed border-list-deep px-5 py-4 text-center font-semibold text-list-ink"
+            >
+              + 구독 추가
+            </Link>
           </div>
-
-          {ranked.length === 0 ? (
-            <p className="rounded-2xl bg-white p-6 text-sm text-ink-soft shadow-sm">
-              아직 등록한 구독이 없습니다. 아래에서 구독을 추가해 주세요.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {ranked.map((stat, index) => (
-                <SubscriptionCard
-                  key={stat.subscription.id}
-                  rank={index + 1}
-                  stat={stat}
-                  usedToday={data.usageLogs.some(
-                    (log) =>
-                      log.subscriptionId === stat.subscription.id &&
-                      log.date === today,
-                  )}
-                  onToggleToday={() =>
-                    toggleUsageLog(stat.subscription.id, today)
-                  }
-                  onRemove={() => removeSubscription(stat.subscription.id)}
-                />
-              ))}
-            </ul>
-          )}
-
-          <Link
-            href="/subscriptions/new"
-            className="block w-full rounded-2xl border-2 border-dashed border-list-deep px-5 py-4 text-center font-semibold text-list-ink"
-          >
-            + 구독 추가
-          </Link>
         </div>
       </div>
 

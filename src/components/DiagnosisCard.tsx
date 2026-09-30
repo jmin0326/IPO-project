@@ -6,7 +6,8 @@ type Props = {
   oneLineDiagnosis: string;
   totalCost: number;
   saving: number;
-  candidateCount: number;
+  /** 손볼 구독 개수 */
+  fixCount: number;
 };
 
 /**
@@ -20,7 +21,7 @@ export default function DiagnosisCard({
   oneLineDiagnosis,
   totalCost,
   saving,
-  candidateCount,
+  fixCount,
 }: Props) {
   return (
     <Link
@@ -45,8 +46,8 @@ export default function DiagnosisCard({
         <div className="flex items-baseline justify-between">
           <dt className="text-sm text-ink-soft">
             절약 예상 최대
-            {candidateCount > 0 && (
-              <span className="ml-1 text-xs">(해지 후보 {candidateCount}개)</span>
+            {fixCount > 0 && (
+              <span className="ml-1 text-xs">(손볼 구독 {fixCount}개)</span>
             )}
           </dt>
           <dd className="text-xl font-semibold text-diag-ink">
