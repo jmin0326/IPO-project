@@ -158,10 +158,26 @@ export const INTENSITY_LIMITS: Record<
   },
 };
 
-export function intensityOf(usageCount: number, category: CategoryId): Intensity {
+/**
+ * 이 서비스에 적용할 이용 강도 기준.
+ *
+ * 보통은 카테고리 기준을 쓰지만, 같은 카테고리 안에서도 성격이 다른 서비스가 있다.
+ * 유튜브가 그렇다. 영상 서비스이긴 한데 거의 매일 쓰는 게 보통이라,
+ * 다른 OTT와 같은 기준을 대면 항상 '자주 씀'이 되어 판정이 의미가 없어진다.
+ * 그런 경우를 위해 서비스에 기준을 직접 적어 둘 수 있게 했다.
+ */
+export function limitsFor(service: Service | undefined) {
+  if (!service) return INTENSITY_LIMITS.ott;
+  return service.intensityLimits ?? INTENSITY_LIMITS[service.category];
+}
+
+export function intensityOf(
+  usageCount: number,
+  service: Service | undefined,
+): Intensity {
   if (usageCount <= 0) return "none";
 
-  const limits = INTENSITY_LIMITS[category];
+  const limits = limitsFor(service);
   if (usageCount <= limits.low) return "low";
   if (usageCount <= limits.medium) return "medium";
   return "high";
@@ -286,10 +302,19 @@ function buildSuggestions(
 
   const suggestions: Suggestion[] = [];
 
-  // 같은 카테고리의 다른 서비스들
-  const siblings = SERVICES.filter(
-    (item) => item.category === service.category && item.id !== service.id,
-  );
+  // 같은 카테고리의 다른 서비스들.
+  //
+  // 갈아타기를 추천할 수 없는 서비스(유튜브 같은)는 양쪽 모두에서 뺀다.
+  // 내가 그런 서비스면 후보 자체가 비고, 남이 그런 서비스면 후보에서 빠진다.
+  const canSwitch = service.switchable !== false;
+  const siblings = canSwitch
+    ? SERVICES.filter(
+        (item) =>
+          item.category === service.category &&
+          item.id !== service.id &&
+          item.switchable !== false,
+      )
+    : [];
 
   const cheaperServices = siblings
     .filter((item) => defaultPriceOf(item) < price)
@@ -465,9 +490,7 @@ export function buildStats(data: AppData, month: string): SubscriptionStat[] {
       findPlan(subscription.serviceId, subscription.planId) ??
       guessPlan(subscription.serviceId, subscription.monthlyPrice);
 
-    const intensity = service
-      ? intensityOf(counted.usageCount, service.category)
-      : "none";
+    const intensity = intensityOf(counted.usageCount, service);
 
     const suggestions = buildSuggestions(
       subscription,

@@ -17,6 +17,7 @@ import {
   buildStats,
   findPortfolioIssues,
   judgeHabit,
+  limitsFor,
   maxSaving,
   savingSuggestions,
   sortByPriority,
@@ -154,6 +155,29 @@ export default function DiagnosisPage() {
                 );
               })}
             </ul>
+
+            {/* 카테고리 기준을 따르지 않는 서비스는 따로 적는다 */}
+            {stats.some((stat) => stat.service?.intensityLimits) && (
+              <ul className="mb-4 space-y-2 text-sm">
+                {stats
+                  .filter((stat) => stat.service?.intensityLimits)
+                  .map((stat) => (
+                    <li
+                      key={stat.subscription.id}
+                      className="rounded-lg border border-diag-deep bg-white px-3 py-2"
+                    >
+                      <p className="font-semibold text-ink">
+                        {stat.name}만 따로 — {limitsFor(stat.service).low + 1}~
+                        {limitsFor(stat.service).medium}회 적당히 ·{" "}
+                        {limitsFor(stat.service).medium + 1}회부터 자주
+                      </p>
+                      <p className="mt-0.5 text-xs text-ink-soft">
+                        {limitsFor(stat.service).note}
+                      </p>
+                    </li>
+                  ))}
+              </ul>
+            )}
 
             <ul className="space-y-1 text-sm">
               {stats.map((stat) => (

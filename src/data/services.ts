@@ -64,6 +64,27 @@ export type Service = {
   reach?: number;
   /** reach를 그렇게 매긴 근거 */
   reachNote?: string;
+  /**
+   * 다른 서비스로 갈아타기 추천을 할 수 있는 서비스인지. 기본은 true.
+   *
+   * false면 이 서비스에 대해 갈아타기를 추천하지도 않고,
+   * 다른 서비스의 대안으로 제시되지도 않는다. (양방향 제외)
+   *
+   * 유튜브가 그런 경우다. 넷플릭스는 '콘텐츠를 사는 것'이지만
+   * 유튜브 프리미엄은 '이미 공짜로 보는 콘텐츠에서 불편함만 없애는 것'이라
+   * 대신 쓸 수 있는 서비스가 구조적으로 존재하지 않는다.
+   */
+  switchable?: boolean;
+  /** switchable이 false일 때 화면에 보여 줄 이유 */
+  switchNote?: string;
+  /**
+   * 카테고리 기준 대신 이 서비스에만 쓸 이용 강도 기준.
+   *
+   * 같은 영상 서비스라도 유튜브는 거의 매일 쓰는 게 보통이라,
+   * 다른 OTT와 같은 기준(월 8회부터 '자주')을 대면 항상 '자주 씀'이 되어
+   * 판정이 의미가 없어진다.
+   */
+  intensityLimits?: { low: number; medium: number; note: string };
   /** 대체 서비스로 추천할 때 보여 줄 장점 한 줄 */
   strength: string;
   /** 대체 서비스로 추천할 때 감안해야 할 단점 한 줄 */
@@ -313,18 +334,27 @@ export const SERVICES: Service[] = [
     ],
   },
 
-  // ---------- 음악 ----------
   // 유튜브는 프리미엄·라이트·뮤직을 한 서비스의 요금제로 묶었다.
   // 따로 두면 "프리미엄에서 라이트로 낮추세요"라는 추천이 나올 수 없기 때문이다.
+  //
+  // 카테고리는 영상 스트리밍이다. 유튜브 프리미엄의 핵심은 '유튜브 영상 광고 제거'이고
+  // 유튜브는 영상 서비스이기 때문이다.
+  // 다만 다른 OTT와 성격이 달라서 예외를 두 개 달아 두었다. (switchable, intensityLimits)
   {
     id: "youtube",
     name: "유튜브",
-    category: "music",
+    category: "ott",
     defaultPlanId: "youtube-premium",
-    reach: 5,
-    reachNote: "유튜브 뮤직 국내 월간 이용자 980만 (2026.1)",
+    switchable: false,
+    switchNote:
+      "유튜브 프리미엄은 이미 공짜로 보는 유튜브에서 광고만 없애는 서비스라, 대신 쓸 수 있는 다른 서비스가 없습니다. 그래서 갈아타기는 추천하지 않고 요금제만 비교합니다",
+    intensityLimits: {
+      low: 5,
+      medium: 15,
+      note: "유튜브는 거의 매일 쓰는 사람이 많아 다른 영상 서비스보다 기준을 높게 잡았다",
+    },
     strength: "영상 광고 제거와 음악을 한 번에 해결",
-    weakness: "음악 앱 중 가장 비쌈",
+    weakness: "구독 서비스 중 비싼 편",
     plans: [
       {
         id: "youtube-lite",
@@ -352,6 +382,7 @@ export const SERVICES: Service[] = [
       },
     ],
   },
+  // ---------- 음악 ----------
   {
     id: "melon",
     name: "멜론",

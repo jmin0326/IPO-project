@@ -15,8 +15,8 @@ import WeekdayChart from "@/components/WeekdayChart";
 import { categoryLabel, findPlan } from "@/data/services";
 import {
   INTENSITY_LABELS,
-  INTENSITY_LIMITS,
   buildStats,
+  limitsFor,
   sortByPriority,
   weekdayCounts,
   weekdayMinutes,
@@ -157,11 +157,12 @@ export default function SubscriptionDetailPage() {
 
           {service && (
             <p className="mt-4 rounded-lg bg-white px-3 py-2 text-xs leading-relaxed text-ink-soft">
-              {categoryLabel(service.category)}는 한 달{" "}
-              {INTENSITY_LIMITS[service.category].low + 1}~
-              {INTENSITY_LIMITS[service.category].medium}번이면 &lsquo;적당히&rsquo;,{" "}
-              {INTENSITY_LIMITS[service.category].medium + 1}번부터
-              &lsquo;자주&rsquo;로 봅니다. {INTENSITY_LIMITS[service.category].note}.
+              {service.intensityLimits
+                ? `${name}${particle(name, "은", "는")} 한 달 `
+                : `${categoryLabel(service.category)}${particle(categoryLabel(service.category), "은", "는")} 한 달 `}
+              {limitsFor(service).low + 1}~{limitsFor(service).medium}번이면
+              &lsquo;적당히&rsquo;, {limitsFor(service).medium + 1}번부터
+              &lsquo;자주&rsquo;로 봅니다. {limitsFor(service).note}.
             </p>
           )}
         </section>
@@ -339,7 +340,13 @@ export default function SubscriptionDetailPage() {
         )}
       </div>
 
-      {service?.reachNote && (
+      {service?.switchable === false && service.switchNote && (
+        <p className="mt-4 text-xs leading-relaxed text-ink-soft">
+          ※ {service.switchNote}.
+        </p>
+      )}
+
+      {service?.switchable !== false && service?.reachNote && (
         <p className="mt-4 text-xs text-ink-soft">
           ※ {name}
           {particle(name, "은", "는")} {service.reachNote}. 갈아타기 추천은 이
