@@ -3,8 +3,14 @@
 // 여기서 중요한 점: 이 파일은 "답"만 돌려주지 않고 "왜 그렇게 판단했는지"도 같이 돌려준다.
 // 상세 진단 화면(/diagnosis)이 그 이유를 그대로 받아서 사람이 읽을 수 있게 보여 준다.
 
-import { findService, serviceColor, serviceName, type Service } from "@/data/services";
-import { monthKeyOf } from "./date";
+import {
+  SERVICES,
+  findService,
+  serviceColor,
+  serviceName,
+  type Service,
+} from "@/data/services";
+import { monthKeyOf, weekdayOf } from "./date";
 import { won } from "./format";
 import type { AppData, Subscription } from "./types";
 
@@ -160,6 +166,64 @@ export function maxSaving(stats: SubscriptionStat[]): number {
     (sum, stat) => sum + stat.subscription.monthlyPrice,
     0,
   );
+}
+
+// ---- 대체 서비스 추천 ----
+
+export type Alternative = {
+  service: Service;
+  /** 이걸로 바꾸면 매달 아끼는 돈 */
+  saving: number;
+};
+
+/**
+ * 같은 카테고리에서 지금보다 싼 서비스를 찾아 아끼는 돈이 큰 순서로 돌려준다.
+ *
+ * 카테고리를 기준으로 삼은 이유: 넷플릭스를 끊고 멜론을 쓰라는 건 말이 안 된다.
+ * "비슷한 일을 대신 할 수 있는가"가 기준이어야 해서, 서비스 목록을 만들 때부터
+ * 그 기준으로 카테고리를 나눠 두었다. (docs/services-research.md 2장)
+ *
+ * 값을 비교할 때 조사해 둔 기본 요금(defaultPrice)을 쓰기 때문에,
+ * 사용자가 할인받아 더 싸게 쓰고 있다면 실제 절약액은 이보다 작을 수 있다.
+ */
+export function findAlternatives(
+  currentServiceId: string,
+  currentMonthlyPrice: number,
+  limit = 3,
+): Alternative[] {
+  const current = findService(currentServiceId);
+  if (!current) return [];
+
+  return SERVICES.filter(
+    (service) =>
+      service.category === current.category &&
+      service.id !== current.id &&
+      service.defaultPrice < currentMonthlyPrice,
+  )
+    .map((service) => ({
+      service,
+      saving: currentMonthlyPrice - service.defaultPrice,
+    }))
+    .sort((a, b) => b.saving - a.saving)
+    .slice(0, limit);
+}
+
+/**
+ * 요일별 이용 횟수를 센다. 0번이 월요일, 6번이 일요일.
+ *
+ * 계획서 스케치에는 '요일별 이용 시간'이라고 적었지만, 지금은 이용 시간(분)을
+ * 받지 않고 '그날 썼다/안 썼다'만 기록하므로 정직하게 '횟수'로 센다.
+ */
+export function weekdayCounts(data: AppData, subscriptionId: string): number[] {
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+
+  for (const log of data.usageLogs) {
+    if (log.subscriptionId !== subscriptionId) continue;
+    // weekdayOf는 0이 일요일이라, 월요일이 0이 되도록 옮긴다.
+    counts[(weekdayOf(log.date) + 6) % 7] += 1;
+  }
+
+  return counts;
 }
 
 // ---- 습관 유형 판정 ----

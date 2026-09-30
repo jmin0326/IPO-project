@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { won } from "@/lib/format";
 import type { SubscriptionStat } from "@/lib/analyze";
 
@@ -24,7 +25,11 @@ export default function SubscriptionCard({
 
   return (
     <li className="flex items-center gap-3 rounded-2xl bg-list p-5 shadow-sm">
-      <div className="min-w-0 flex-1">
+      {/* 카드 본문을 누르면 이 구독의 상세 화면으로 간다. */}
+      <Link
+        href={`/subscriptions/${subscription.id}`}
+        className="min-w-0 flex-1 rounded-lg transition hover:opacity-70"
+      >
         <p className="flex items-center gap-2 font-semibold text-ink">
           <span className="text-list-ink">{rank}위.</span>
           <span
@@ -37,6 +42,7 @@ export default function SubscriptionCard({
               해지 후보
             </span>
           )}
+          <span className="text-list-ink">›</span>
         </p>
 
         <p className="mt-1 text-sm text-ink-soft">
@@ -56,7 +62,7 @@ export default function SubscriptionCard({
             <span className="text-ink">1회당 {won(costPerUse)}</span>
           )}
         </p>
-      </div>
+      </Link>
 
       <div className="flex shrink-0 flex-col items-end gap-1">
         <button

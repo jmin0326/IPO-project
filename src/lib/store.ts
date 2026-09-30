@@ -86,6 +86,27 @@ export function addSubscription(input: Omit<Subscription, "id">) {
   setData({ ...state, subscriptions: [...state.subscriptions, subscription] });
 }
 
+/**
+ * 같은 구독을 다른 서비스로 갈아탄다. (상세 화면의 '서비스 변경')
+ *
+ * 이용 기록은 그대로 둔다. 사람이 하던 일(영상 보기)은 그대로고 수단만 바뀐 것이라,
+ * 지금까지 쌓인 이용 패턴은 그대로 두는 편이 맞다고 봤다.
+ */
+export function changeSubscriptionService(
+  subscriptionId: string,
+  serviceId: string,
+  monthlyPrice: number,
+) {
+  setData({
+    ...state,
+    subscriptions: state.subscriptions.map((subscription) =>
+      subscription.id === subscriptionId
+        ? { ...subscription, serviceId, monthlyPrice }
+        : subscription,
+    ),
+  });
+}
+
 /** 구독을 지우면 거기에 딸린 이용 기록과 몰아 입력도 같이 지운다. */
 export function removeSubscription(subscriptionId: string) {
   setData({
