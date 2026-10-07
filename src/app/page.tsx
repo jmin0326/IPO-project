@@ -35,6 +35,7 @@ import {
 } from "@/lib/date";
 import { won } from "@/lib/format";
 import {
+  clearAll,
   removeUsageLog,
   resetToSeed,
   setUsageMinutes,
@@ -52,6 +53,8 @@ export default function Home() {
   // 절대 월이 아니라 '오늘로부터 몇 달'로 들고 있는다.
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // 초기화는 되돌릴 수 없어서 한 번 더 물어본다.
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   // 서버에서 미리 그릴 때는 오늘 날짜와 저장된 데이터를 알 수 없으므로
   // 자리만 잡아 두고, 브라우저에서 진짜 내용을 그린다.
@@ -328,11 +331,50 @@ export default function Home() {
         </span>
         <button
           type="button"
-          onClick={resetToSeed}
+          onClick={() => {
+            resetToSeed();
+            setConfirmingClear(false);
+            setSelectedDate(null);
+          }}
           className="underline underline-offset-2"
         >
           샘플 데이터로 되돌리기
         </button>
+
+        {confirmingClear ? (
+          <span className="flex flex-wrap items-center gap-2 rounded-lg bg-list px-3 py-1.5">
+            <span className="text-list-ink">
+              등록한 구독과 이용 기록이 전부 지워집니다. 되돌릴 수 없습니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                clearAll();
+                setConfirmingClear(false);
+                setSelectedDate(null);
+              }}
+              className="rounded bg-list-deep px-2 py-1 font-semibold text-list-ink"
+            >
+              네, 초기화합니다
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(false)}
+              className="underline underline-offset-2"
+            >
+              아니요
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmingClear(true)}
+            title="샘플까지 전부 지우고 빈 상태로 만듭니다"
+            className="underline underline-offset-2"
+          >
+            초기화
+          </button>
+        )}
       </footer>
     </main>
   );

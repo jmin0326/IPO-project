@@ -227,3 +227,13 @@ export function clearMonthlyCount(subscriptionId: string, month: string) {
 export function resetToSeed() {
   setData(SEED_DATA);
 }
+
+/**
+ * 전부 비운다. 샘플까지 다 지우고 구독 0개인 상태로 만든다.
+ *
+ * 샘플을 치우고 내 구독을 처음부터 넣어 보고 싶을 때 쓴다.
+ * 되돌릴 수 없으므로 화면에서 한 번 더 물어본 뒤에 부른다.
+ */
+export function clearAll() {
+  setData({ subscriptions: [], usageLogs: [], monthlyCounts: [] });
+}
