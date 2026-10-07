@@ -19,11 +19,10 @@ import PortfolioNotices from "@/components/PortfolioNotices";
 import SubscriptionCard from "@/components/SubscriptionCard";
 import { CATEGORIES, findService, serviceColor, serviceName } from "@/data/services";
 import {
+  buildActionPlan,
   buildStats,
   findPortfolioIssues,
   judgeHabit,
-  maxSaving,
-  savingSuggestions,
   sortByPriority,
   totalMonthlyCost,
 } from "@/lib/analyze";
@@ -74,6 +73,7 @@ export default function Home() {
   const ranked = sortByPriority(stats);
   const habit = judgeHabit(stats);
   const issues = findPortfolioIssues(data, stats);
+  const plan = buildActionPlan(data, stats);
 
   // 달력에 찍을 이용 기록 (보고 있는 달만)
   const usageByDate = new Map<string, CalendarUsage[]>();
@@ -131,8 +131,8 @@ export default function Home() {
             habitType={habit.type}
             oneLineDiagnosis={habit.oneLine}
             totalCost={totalMonthlyCost(stats)}
-            saving={maxSaving(stats)}
-            fixCount={savingSuggestions(stats).length}
+            saving={plan.total}
+            fixCount={plan.items.filter((item) => !item.alternative).length}
           />
 
           <Link

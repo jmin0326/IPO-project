@@ -227,7 +227,7 @@ export type Suggestion = {
 };
 
 /** 요금제를 바꿨을 때 뭐가 달라지는지 사람 말로 적는다. */
-function planDiffText(from: Plan, to: Plan): string {
+export function planDiffText(from: Plan, to: Plan): string {
   const parts: string[] = [];
 
   if (!from.ads && to.ads) parts.push("광고가 붙습니다");
@@ -562,7 +562,11 @@ export function maxSaving(stats: SubscriptionStat[]): number {
 // 4. 구독 전체를 함께 보기 (중복 · 묶음 · 몰림)
 // ---------------------------------------------------------------
 
-export type PortfolioIssueKind = "duplicate" | "bundle" | "consolidate";
+export type PortfolioIssueKind =
+  | "duplicate"
+  | "bundle"
+  | "focus"
+  | "consolidate";
 
 export type PortfolioIssue = {
   kind: PortfolioIssueKind;
@@ -576,6 +580,7 @@ export type PortfolioIssue = {
 export const PORTFOLIO_LABELS: Record<PortfolioIssueKind, string> = {
   duplicate: "중복 결제",
   bundle: "묶음 상품",
+  focus: "한쪽만 씀",
   consolidate: "너무 많음",
 };
 
@@ -595,10 +600,21 @@ export function findPortfolioIssues(
 
     if (owned.length === 0) continue;
 
+    // 혜택으로 주는 요금제가 정해져 있으면, 지금 그 요금제를 쓰고 있을 때만 해당된다.
+    //
+    // 네이버플러스가 주는 건 넷플릭스 '광고형'이다. 프리미엄을 쓰는 사람에게
+    // "네이버플러스 쓰면 공짜"라고 하면 사실은 요금제를 낮추라는 말이 되어 버린다.
+    // 그건 묶음 안내가 아니라 다른 추천이므로 여기서 다루지 않는다.
+    const eligible = owned.filter((item) => {
+      const includedPlanId = bundle.includedPlanIds?.[item.serviceId];
+      return !includedPlanId || item.subscription!.planId === includedPlanId;
+    });
+    if (eligible.length === 0) continue;
+
     if (host) {
       // 이미 묶음을 갖고 있는데 안에 든 걸 또 따로 내고 있다
-      // 하나만 고를 수 있는 묶음이면 가장 비싼 것 하나만 혜택으로 덮인다
-      const covered = bundle.chooseOne ? owned.slice(0, 1) : owned;
+      // 하나만 고를 수 있는 묶음이면 하나만 혜택으로 덮인다
+      const covered = bundle.chooseOne ? eligible.slice(0, 1) : eligible;
 
       for (const item of covered) {
         const subscription = item.subscription!;
@@ -607,11 +623,7 @@ export function findPortfolioIssues(
           ? findPlan(item.serviceId, includedPlanId)
           : undefined;
 
-        // 혜택으로 주는 요금제가 정해져 있으면 그 금액만큼만 덮인다
-        const saving = includedPlan
-          ? Math.min(subscription.monthlyPrice, includedPlan.price)
-          : subscription.monthlyPrice;
-
+        const saving = subscription.monthlyPrice;
         if (saving <= 0) continue;
 
         issues.push({
@@ -622,7 +634,8 @@ export function findPortfolioIssues(
           action: includedPlan
             ? `${bundle.name} 혜택으로 ${includedPlan.name}을 받으면 그만큼 덜 냅니다`
             : `${serviceName(item.serviceId)} 결제를 멈춰도 그대로 쓸 수 있습니다`,
-          subscriptionIds: [subscription.id, host.id],
+          // 호스트(쿠팡 와우)는 그대로 둬도 되는 구독이라 여기 넣지 않는다.
+          subscriptionIds: [subscription.id],
         });
       }
     } else {
@@ -631,21 +644,13 @@ export function findPortfolioIssues(
       if (!hostService) continue;
 
       const hostPrice = defaultPriceOf(hostService);
-      const target = bundle.chooseOne ? owned.slice(0, 1) : owned;
+      const target = bundle.chooseOne ? eligible.slice(0, 1) : eligible;
 
-      const covered = target.reduce((sum, item) => {
-        const subscription = item.subscription!;
-        const includedPlanId = bundle.includedPlanIds?.[item.serviceId];
-        const includedPlan = includedPlanId
-          ? findPlan(item.serviceId, includedPlanId)
-          : undefined;
-        return (
-          sum +
-          (includedPlan
-            ? Math.min(subscription.monthlyPrice, includedPlan.price)
-            : subscription.monthlyPrice)
-        );
-      }, 0);
+      // 쓰고 있는 요금제가 혜택으로 주는 것과 같으므로 내던 돈이 통째로 덮인다.
+      const covered = target.reduce(
+        (sum, item) => sum + item.subscription!.monthlyPrice,
+        0,
+      );
 
       const saving = covered - hostPrice;
       if (saving <= 0) continue;
@@ -671,29 +676,185 @@ export function findPortfolioIssues(
     }
   }
 
-  // 같은 카테고리를 여러 개 들고 있는데 다 합쳐도 별로 안 쓰는 경우
+  // 같은 카테고리를 두 개 이상 들고 있는 경우
+  //
+  // 여기서 "둘 다 해지하세요"라고 하면 쓸모없는 조언이 된다.
+  // 한쪽을 자주 쓰고 있다면 그쪽에 몰아 쓰는 게 맞는 답이고,
+  // 해지해서 남는 돈으로 남긴 쪽의 요금제를 올릴 수도 있다.
+  const coveredByBundle = coveredServiceIds(data);
+
   for (const category of CATEGORIES) {
-    const inCategory = stats.filter((stat) => stat.service?.category === category.id);
-    if (inCategory.length < 3) continue;
+    const paying = stats.filter(
+      (stat) =>
+        stat.service?.category === category.id &&
+        // 묶음에 포함돼 공짜로 쓰는 건 위에서 따로 안내하므로 뺀다.
+        !coveredByBundle.has(stat.subscription.serviceId) &&
+        // 서로 바꿔 쓸 수 없는 서비스도 뺀다.
+        // 유튜브가 그렇다. "넷플릭스 끊고 유튜브에 몰아 쓰세요"는 말이 안 된다.
+        stat.service.switchable !== false,
+    );
+    if (paying.length < 2) continue;
 
-    const totalUse = inCategory.reduce((sum, stat) => sum + stat.usageCount, 0);
-    if (totalUse > INTENSITY_LIMITS[category.id].medium) continue;
+    const sorted = [...paying].sort((a, b) => b.usageCount - a.usageCount);
+    const main = sorted[0];
+    const rest = sorted.slice(1);
+    const totalUse = paying.reduce((sum, stat) => sum + stat.usageCount, 0);
+    const restSaving = rest.reduce(
+      (sum, stat) => sum + stat.subscription.monthlyPrice,
+      0,
+    );
+    const restNames = rest.map((stat) => stat.name).join(", ");
 
-    const sorted = [...inCategory].sort((a, b) => b.usageCount - a.usageCount);
-    const keep = sorted[0];
-    const drop = sorted.slice(1);
+    // (1) 한쪽만 자주 쓰는 경우 — 몰아 쓰고, 남는 돈으로 그쪽을 올리는 것도 같이 제안
+    if (
+      main.intensity === "high" &&
+      rest.every((stat) => stat.intensity !== "high") &&
+      restSaving > 0
+    ) {
+      const nextPlan =
+        main.plan && main.service
+          ? main.service.plans
+              .filter((plan) => plan.price > main.plan!.price)
+              .sort((a, b) => a.price - b.price)[0]
+          : undefined;
 
-    issues.push({
-      kind: "consolidate",
-      title: `${category.label}${particle(category.label, "을", "를")} ${inCategory.length}개나 들고 있습니다`,
-      saving: drop.reduce((sum, stat) => sum + stat.subscription.monthlyPrice, 0),
-      reason: `${inCategory.length}개를 합쳐도 이번 달에 ${totalUse}번밖에 안 썼습니다.`,
-      action: `가장 많이 쓴 ${keep.name} 하나만 남기는 것을 생각해 보세요`,
-      subscriptionIds: drop.map((stat) => stat.subscription.id),
-    });
+      const upgradeText =
+        nextPlan && main.plan
+          ? ` 아끼는 돈 중 ${won(nextPlan.price - main.plan.price)}만 쓰면 ${main.name}${particle(main.name, "을", "를")} ${nextPlan.name}${particle(nextPlan.name, "으로", "로")} 올릴 수도 있습니다 — ${planDiffText(main.plan, nextPlan)}.`
+          : "";
+
+      issues.push({
+        kind: "focus",
+        title: `${category.label} ${paying.length}개 중 ${main.name}만 쓰고 있습니다`,
+        saving: restSaving,
+        reason: `이번 달 이용 횟수가 ${main.name} ${main.usageCount}회, ${rest
+          .map((stat) => `${stat.name} ${stat.usageCount}회`)
+          .join(", ")}입니다.`,
+        action: `${restNames}${particle(restNames, "을", "를")} 해지하고 ${main.name}에 몰아 쓰는 편이 낫습니다.${upgradeText}`,
+        subscriptionIds: rest.map((stat) => stat.subscription.id),
+      });
+      continue;
+    }
+
+    // (2) 여러 개를 들고 있는데 다 합쳐도 별로 안 쓰는 경우
+    if (paying.length >= 3 && totalUse <= INTENSITY_LIMITS[category.id].medium) {
+      issues.push({
+        kind: "consolidate",
+        title: `${category.label}${particle(category.label, "을", "를")} ${paying.length}개나 들고 있습니다`,
+        saving: restSaving,
+        reason: `${paying.length}개를 합쳐도 이번 달에 ${totalUse}번밖에 안 썼습니다.`,
+        action: `가장 많이 쓴 ${main.name} 하나만 남기는 것을 생각해 보세요`,
+        subscriptionIds: rest.map((stat) => stat.subscription.id),
+      });
+    }
   }
 
   return issues.sort((a, b) => b.saving - a.saving);
+}
+
+// ---------------------------------------------------------------
+// 할 일 목록 — 전체 점검과 구독별 추천을 하나로 합친다
+// ---------------------------------------------------------------
+
+export type ActionItem = {
+  key: string;
+  badge: string;
+  title: string;
+  saving: number;
+  why: string;
+  /** 이걸 택하면 포기해야 하는 것 */
+  caution?: string;
+  /** caution이 '포기해야 할 것'인지, 그냥 알아 둘 내용인지 */
+  cautionIsTradeoff: boolean;
+  subscriptionIds: string[];
+  /** 구독 하나짜리면 그 id (화면에서 링크 걸 때 쓴다) */
+  subscriptionId?: string;
+  /**
+   * 이미 앞의 항목이 다룬 구독만 건드리는 '또 다른 방법'인지.
+   *
+   * 예: 스포티파이를 해지하는 것(8,690원)과 네이버플러스로 묶는 것(3,790원)은
+   * 둘 다 할 수 없다. 둘 다 보여 주되 절약액은 한 번만 센다.
+   */
+  alternative: boolean;
+};
+
+/**
+ * 전체 점검과 구독별 추천을 한 줄로 세워 '이번 달 할 일'을 만든다.
+ *
+ * 따로 계산하면 메인 화면의 절약액과 진단 화면의 목록이 안 맞는 일이 생긴다.
+ * 그래서 두 화면이 모두 이 함수 하나를 쓴다.
+ */
+export function buildActionPlan(data: AppData, stats: SubscriptionStat[]) {
+  const issues = findPortfolioIssues(data, stats);
+
+  const candidates: ActionItem[] = [
+    ...issues.map((issue, index) => ({
+      key: `issue-${index}`,
+      badge: PORTFOLIO_LABELS[issue.kind],
+      title: issue.title,
+      saving: issue.saving,
+      why: `${issue.reason} ${issue.action}`,
+      cautionIsTradeoff: false,
+      subscriptionIds: issue.subscriptionIds,
+      alternative: false,
+    })),
+    ...stats
+      .filter(
+        (stat) => stat.primary.saving > 0 && stat.primary.kind !== "upgrade",
+      )
+      .map((stat) => ({
+        key: stat.subscription.id,
+        badge: SUGGESTION_LABELS[stat.primary.kind],
+        title: `${stat.name} — ${stat.primary.title}`,
+        saving: stat.primary.saving,
+        why: stat.primary.reason,
+        caution: stat.primary.tradeoff || undefined,
+        // 해지의 '감안할 점'은 포기할 것이 아니라 안심시키는 말이라 따로 구분한다.
+        cautionIsTradeoff: stat.primary.kind !== "cancel",
+        subscriptionIds: [stat.subscription.id],
+        subscriptionId: stat.subscription.id,
+        alternative: false,
+      })),
+  ].sort((a, b) => b.saving - a.saving);
+
+  // 같은 구독을 건드리는 항목이 여럿이면 금액이 큰 쪽을 '할 일'로 삼고,
+  // 나머지는 바로 그 아래에 '또 다른 방법'으로 붙인다.
+  const claimedBy = new Map<string, string>();
+  const savingOfKey = new Map<string, number>();
+  const mainItems: ActionItem[] = [];
+  const alternatives = new Map<string, ActionItem[]>();
+  let total = 0;
+
+  for (const item of candidates) {
+    const isNew = item.subscriptionIds.some((id) => !claimedBy.has(id));
+
+    if (isNew) {
+      item.subscriptionIds.forEach((id) => claimedBy.set(id, item.key));
+      savingOfKey.set(item.key, item.saving);
+      total += item.saving;
+      mainItems.push(item);
+      continue;
+    }
+
+    const coveringKey = claimedBy.get(
+      item.subscriptionIds.find((id) => claimedBy.has(id))!,
+    )!;
+
+    // 아끼는 돈이 같으면 사실상 같은 얘기라 두 번 보여 주지 않는다.
+    if (savingOfKey.get(coveringKey) === item.saving) continue;
+
+    const list = alternatives.get(coveringKey) ?? [];
+    list.push({ ...item, alternative: true });
+    alternatives.set(coveringKey, list);
+  }
+
+  const items: ActionItem[] = [];
+  for (const item of mainItems) {
+    items.push(item);
+    for (const alt of alternatives.get(item.key) ?? []) items.push(alt);
+  }
+
+  return { items, total, touched: new Set(claimedBy.keys()) };
 }
 
 // ---------------------------------------------------------------
