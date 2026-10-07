@@ -70,7 +70,15 @@ export default function DiagnosisPage() {
     );
   }
 
-  let step = 0;
+  // 번호는 '또 다른 방법'을 빼고 센다.
+  // 숫자를 하나씩 올려 가며 세면 '화면을 그리는 도중에 값을 바꾸는 것'이 되어
+  // 다시 그릴 때 결과가 달라질 수 있다. 그래서 앞에 몇 개가 있었는지를 세서 구한다.
+  const numbered = plan.items.map((item, index) => ({
+    item,
+    step: plan.items.filter(
+      (other, otherIndex) => otherIndex <= index && !other.alternative,
+    ).length,
+  }));
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-10">
@@ -109,9 +117,7 @@ export default function DiagnosisPage() {
         </p>
       ) : (
         <ul className="mt-3 space-y-3">
-          {plan.items.map((item) => {
-            if (!item.alternative) step += 1;
-
+          {numbered.map(({ item, step }) => {
             return (
               <li
                 key={item.key}

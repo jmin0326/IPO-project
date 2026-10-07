@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import AuthGate from "@/components/AuthGate";
 import DemoDateBar from "@/components/DemoDateBar";
 import "./globals.css";
 
@@ -27,7 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <DemoDateBar />
-        {children}
+        <AuthGate>{children}</AuthGate>
       </body>
     </html>
   );
