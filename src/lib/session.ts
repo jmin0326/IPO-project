@@ -102,6 +102,16 @@ function subscribe(listener: () => void) {
   };
 }
 
+/**
+ * 로그인 상태가 바뀔 때 알려 준다. (화면이 아니라 다른 코드가 쓸 때)
+ *
+ * store.ts 가 이걸 듣고 있다가, 로그인하면 그 사람 데이터를 불러오고
+ * 로그아웃하면 화면에서 비운다.
+ */
+export function subscribeAuth(listener: () => void) {
+  return subscribe(listener);
+}
+
 export function useAuth(): AuthState {
   return useSyncExternalStore(
     subscribe,

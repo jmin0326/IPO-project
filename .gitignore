@@ -43,3 +43,6 @@ next-env.d.ts
 
 # claude code
 .claude/
+
+# 발표용 샘플 계정 메모 (비밀번호가 들어 있어 저장소에 올리지 않는다)
+*.local.md

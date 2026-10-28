@@ -35,8 +35,8 @@ import {
 import { won } from "@/lib/format";
 import {
   clearAll,
+  loadSampleData,
   removeUsageLog,
-  resetToSeed,
   setUsageMinutes,
   toggleUsageLog,
   useAppData,
@@ -52,8 +52,8 @@ export default function Home() {
   // 절대 월이 아니라 '오늘로부터 몇 달'로 들고 있는다.
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  // 초기화는 되돌릴 수 없어서 한 번 더 물어본다.
-  const [confirmingClear, setConfirmingClear] = useState(false);
+  // 샘플 넣기와 전체 지우기는 둘 다 지금 데이터를 날리므로 한 번 더 물어본다.
+  const [pending, setPending] = useState<"sample" | "clear" | null>(null);
 
   // 서버에서 미리 그릴 때는 오늘 날짜와 저장된 데이터를 알 수 없으므로
   // 자리만 잡아 두고, 브라우저에서 진짜 내용을 그린다.
@@ -324,56 +324,60 @@ export default function Home() {
         </div>
       </div>
 
-      <footer className="mt-10 flex flex-wrap items-center gap-3 text-xs text-ink-soft">
-        <span>
-          ※ 입력한 내용은 지금 쓰는 브라우저에만 저장됩니다. (차시 7에서 Supabase로
-          옮길 예정)
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            resetToSeed();
-            setConfirmingClear(false);
-            setSelectedDate(null);
-          }}
-          className="underline underline-offset-2"
-        >
-          샘플 데이터로 되돌리기
-        </button>
+      <footer className="mt-10 space-y-2 text-xs text-ink-soft">
+        <p>
+          ※ 등록한 내용은 내 계정에 저장됩니다. 다른 기기에서 로그인해도 그대로
+          보입니다.
+        </p>
 
-        {confirmingClear ? (
-          <span className="flex flex-wrap items-center gap-2 rounded-lg bg-list px-3 py-1.5">
+        {pending === null && (
+          <p className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setPending("sample")}
+              title="시연용 샘플 구독과 이용 기록을 이 계정에 넣습니다"
+              className="underline underline-offset-2"
+            >
+              샘플 데이터 넣기
+            </button>
+            <button
+              type="button"
+              onClick={() => setPending("clear")}
+              title="이 계정의 구독과 이용 기록을 전부 지웁니다"
+              className="underline underline-offset-2"
+            >
+              전부 지우기
+            </button>
+          </p>
+        )}
+
+        {pending !== null && (
+          <p className="flex flex-wrap items-center gap-2 rounded-lg bg-list px-3 py-1.5">
             <span className="text-list-ink">
-              등록한 구독과 이용 기록이 전부 지워집니다. 되돌릴 수 없습니다.
+              {pending === "sample"
+                ? "지금 등록된 구독을 모두 지우고 샘플로 바꿉니다."
+                : "등록한 구독과 이용 기록이 전부 지워집니다."}{" "}
+              되돌릴 수 없습니다.
             </span>
             <button
               type="button"
               onClick={() => {
-                clearAll();
-                setConfirmingClear(false);
                 setSelectedDate(null);
+                setPending(null);
+                void (pending === "sample" ? loadSampleData() : clearAll());
               }}
               className="rounded bg-list-deep px-2 py-1 font-semibold text-list-ink"
             >
-              네, 초기화합니다
+              {pending === "sample" ? "네, 샘플로 바꿉니다" : "네, 전부 지웁니다"}
             </button>
             <button
               type="button"
-              onClick={() => setConfirmingClear(false)}
+              onClick={() => setPending(null)}
               className="underline underline-offset-2"
             >
               아니요
             </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmingClear(true)}
-            title="샘플까지 전부 지우고 빈 상태로 만듭니다"
-            className="underline underline-offset-2"
-          >
-            초기화
-          </button>
+          </p>
         )}
       </footer>
     </main>

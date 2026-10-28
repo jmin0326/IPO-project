@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useAuth } from "@/lib/session";
+import { clearError, useStore } from "@/lib/store";
 import { useIsClient } from "@/lib/useIsClient";
 
 const OPEN_PATHS = ["/login"];
@@ -15,6 +16,7 @@ const OPEN_PATHS = ["/login"];
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const isClient = useIsClient();
   const auth = useAuth();
+  const store = useStore();
   const pathname = usePathname();
 
   if (OPEN_PATHS.includes(pathname)) return <>{children}</>;
@@ -70,7 +72,32 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </div>
-      {children}
+
+      {/* 저장에 실패하면 조용히 넘어가지 않고 알린다.
+          화면에는 반영됐는데 DB에는 안 들어간 상태를 모르고 지나가면 안 된다. */}
+      {store.error && (
+        <div className="border-b border-list-deep bg-list">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-5 py-2 text-xs">
+            <span className="text-list-ink">{store.error}</span>
+            <button
+              type="button"
+              onClick={clearError}
+              className="shrink-0 underline underline-offset-2 text-list-ink"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 처음 불러오는 중에는 '구독이 없습니다'가 뜨면 안 된다. */}
+      {store.status === "ready" ? (
+        children
+      ) : (
+        <main className="mx-auto w-full max-w-5xl px-5 py-10">
+          <p className="text-sm text-ink-soft">내 구독을 불러오는 중…</p>
+        </main>
+      )}
     </>
   );
 }
