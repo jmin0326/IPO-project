@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AGE_GROUPS, signIn, signUp, useAuth } from "@/lib/session";
+import { AGE_GROUPS, signIn, signUp, useAuth, usernameOf } from "@/lib/session";
 import { useIsClient } from "@/lib/useIsClient";
 
 export default function LoginPage() {
@@ -16,7 +16,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
   const [ageGroup, setAgeGroup] = useState(AGE_GROUPS[0]);
@@ -37,7 +37,9 @@ export default function LoginPage() {
       <main className="mx-auto w-full max-w-sm px-5 py-16 text-center">
         <p className="text-ink">
           이미 로그인되어 있습니다
-          {auth.profile && ` — ${auth.profile.nickname}님`}
+          {auth.profile
+            ? ` — ${auth.profile.nickname}님`
+            : ` — ${usernameOf(auth.email) ?? ""}`}
         </p>
         <button
           type="button"
@@ -54,8 +56,8 @@ export default function LoginPage() {
     event.preventDefault();
     setError("");
 
-    if (!email.trim() || !password) {
-      setError("이메일과 비밀번호를 입력해 주세요.");
+    if (!username.trim() || !password) {
+      setError("아이디와 비밀번호를 입력해 주세요.");
       return;
     }
 
@@ -69,12 +71,15 @@ export default function LoginPage() {
     const result =
       mode === "signUp"
         ? await signUp({
-            email: email.trim(),
+            username: username.trim().toLowerCase(),
             password,
             nickname: nickname.trim(),
             ageGroup,
           })
-        : await signIn({ email: email.trim(), password });
+        : await signIn({
+            username: username.trim().toLowerCase(),
+            password,
+          });
 
     setBusy(false);
 
@@ -113,13 +118,13 @@ export default function LoginPage() {
 
       <form onSubmit={handleSubmit} className="mt-4 space-y-3">
         <label className="block rounded-xl bg-diag p-4">
-          <span className="text-sm text-diag-ink">이메일</span>
+          <span className="text-sm text-diag-ink">아이디</span>
           <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="me@example.com"
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="영문 소문자·숫자 3~20자"
             className="mt-1 w-full bg-transparent text-lg text-ink outline-none"
           />
         </label>

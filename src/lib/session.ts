@@ -15,6 +15,59 @@ import { supabase } from "./supabaseClient";
 
 export const AGE_GROUPS = ["10대", "20대", "30대", "40대", "50대 이상"];
 
+/**
+ * 아이디 뒤에 붙여 Supabase 에 넘길 도메인.
+ *
+ * Supabase Auth 는 아이디 로그인을 지원하지 않고 이메일만 받는다.
+ * 그래서 화면에서는 아이디만 받고, 속으로만 '아이디@도메인' 으로 바꿔 보낸다.
+ * 사용자는 이메일을 볼 일이 없다.
+ *
+ * 주의: 이 주소로는 메일을 받을 수 없다.
+ * Supabase 설정에서 '이메일 확인(Confirm email)' 을 다시 켜면 가입이 멈춘다.
+ */
+export const USERNAME_DOMAIN = "gudok.test";
+
+/** 아이디로 쓸 수 있는 글자: 영문 소문자·숫자·밑줄·빼기, 3~20자 */
+const USERNAME_PATTERN = /^[a-z0-9_-]{3,20}$/;
+
+export function checkUsername(username: string): string | null {
+  if (!USERNAME_PATTERN.test(username)) {
+    return "아이디는 영문 소문자·숫자·_·- 로 3~20자여야 합니다.";
+  }
+  return null;
+}
+
+function toEmail(username: string): string {
+  return `${username}@${USERNAME_DOMAIN}`;
+}
+
+/** 'demo@gudok.test' -> 'demo' */
+export function usernameOf(email: string | null): string | null {
+  if (!email) return null;
+  return email.endsWith(`@${USERNAME_DOMAIN}`) ? email.split("@")[0] : email;
+}
+
+/**
+ * Supabase 가 돌려주는 영문 오류를 사람 말로 바꾼다.
+ * '이메일'이라는 말이 그대로 나가면 사용자가 헷갈린다.
+ */
+function toKorean(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("invalid login credentials")) {
+    return "아이디 또는 비밀번호가 맞지 않습니다.";
+  }
+  if (lower.includes("already registered") || lower.includes("already exists")) {
+    return "이미 쓰고 있는 아이디입니다.";
+  }
+  if (lower.includes("password") && lower.includes("6")) {
+    return "비밀번호는 6자 이상이어야 합니다.";
+  }
+  if (lower.includes("email address") && lower.includes("invalid")) {
+    return "이 아이디는 쓸 수 없습니다. 다른 아이디로 해 주세요.";
+  }
+  return message;
+}
+
 export type Profile = {
   id: string;
   nickname: string;
@@ -130,17 +183,20 @@ export function currentUserId(): string | null {
 export type AuthResult = { ok: true } | { ok: false; message: string };
 
 export async function signUp(input: {
-  email: string;
+  username: string;
   password: string;
   nickname: string;
   ageGroup: string;
 }): Promise<AuthResult> {
+  const invalid = checkUsername(input.username);
+  if (invalid) return { ok: false, message: invalid };
+
   const { data, error } = await supabase.auth.signUp({
-    email: input.email,
+    email: toEmail(input.username),
     password: input.password,
   });
 
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: toKorean(error.message) };
 
   // Supabase 설정에서 '이메일 확인'이 켜져 있으면 바로 로그인되지 않는다.
   // 그러면 세션이 없어서 profiles 에 쓸 수 없다(보안 규칙이 막는다).
@@ -158,22 +214,22 @@ export async function signUp(input: {
     age_group: input.ageGroup,
   });
 
-  if (profileError) return { ok: false, message: profileError.message };
+  if (profileError) return { ok: false, message: toKorean(profileError.message) };
 
   await applySession(data.session);
   return { ok: true };
 }
 
 export async function signIn(input: {
-  email: string;
+  username: string;
   password: string;
 }): Promise<AuthResult> {
   const { error } = await supabase.auth.signInWithPassword({
-    email: input.email,
+    email: toEmail(input.username),
     password: input.password,
   });
 
-  if (error) return { ok: false, message: error.message };
+  if (error) return { ok: false, message: toKorean(error.message) };
   return { ok: true };
 }
 

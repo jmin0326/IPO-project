@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut, useAuth } from "@/lib/session";
+import { signOut, useAuth, usernameOf } from "@/lib/session";
 import { clearError, useStore } from "@/lib/store";
 import { useIsClient } from "@/lib/useIsClient";
 
@@ -60,7 +60,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
                 {auth.profile.ageGroup && ` · ${auth.profile.ageGroup}`}
               </>
             ) : (
-              auth.email
+              usernameOf(auth.email)
             )}
           </span>
           <button
