@@ -10,6 +10,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import ServiceTile from "@/components/ServiceTile";
 import SuggestionBadge from "@/components/SuggestionBadge";
 import WeekdayChart from "@/components/WeekdayChart";
 import { categoryLabel, findPlan } from "@/data/services";
@@ -69,7 +70,7 @@ export default function SubscriptionDetailPage() {
     );
   }
 
-  const { subscription, name, planName, color, service, plan, usageCount } = stat;
+  const { subscription, name, planName, service, plan, usageCount } = stat;
 
   const minutesByWeekday = weekdayMinutes(data, subscription.id);
   const hasMinutes = minutesByWeekday.some((value) => value > 0);
@@ -108,7 +109,7 @@ export default function SubscriptionDetailPage() {
       </Link>
 
       <h1 className="mt-3 flex flex-wrap items-center gap-2 text-2xl font-bold text-ink">
-        <span className="size-3 rounded-full" style={{ backgroundColor: color }} />
+        <ServiceTile serviceId={subscription.serviceId} />
         {name}
         <span className="text-base font-normal text-ink-soft">{planName}</span>
       </h1>

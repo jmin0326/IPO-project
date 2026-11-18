@@ -665,3 +665,59 @@ export function serviceColor(serviceId: string): string {
   const service = findService(serviceId);
   return service ? categoryColor(service.category) : "#9aa0a6";
 }
+
+// ---- 브랜드 타일 ----
+//
+// 목록에서 서비스를 빨리 알아보게 하려고 각 서비스의 브랜드 색과
+// 타일에 넣을 짧은 글자를 둔다. 예전에는 2px 짜리 카테고리 색 점 하나뿐이라
+// 넷플릭스인지 티빙인지 눈으로 구분이 안 됐다.
+//
+// 주의 — 색을 작은 타일에만 쓰는 이유
+// 카드 배경을 브랜드 색으로 칠하면 빨강·초록·보라 카드가 세로로 쌓여서
+// 오히려 더 산만해진다. 색은 작게 쓸 때 알아보는 데 도움이 되고
+// 크게 쓰면 방해가 된다. 그래서 타일만 칠하고 카드는 흰 바탕으로 둔다.
+//
+// 로고 이미지를 쓰지 않은 이유: 기업 로고는 상표라 함부로 가져다 쓸 수 없다.
+// 머리글자 타일은 그 문제가 없으면서 생김새도 통일된다.
+
+type Brand = { color: string; label: string };
+
+/**
+ * ✅ 표시는 브랜드 색이 널리 알려져 출처를 확인한 것,
+ * ~ 표시는 로고에서 눈으로 고른 근사값이다. 국내 서비스는 공식 색을 공개하지 않는다.
+ * 고치려면 아래 한 줄만 바꾸면 된다.
+ */
+const BRANDS: Record<string, Brand> = {
+  netflix: { color: "#E50914", label: "N" }, // ✅
+  "coupang-play": { color: "#A50034", label: "쿠플" }, // ~
+  tving: { color: "#FF153C", label: "티빙" }, // ~
+  "disney-plus": { color: "#113CCF", label: "D+" }, // ✅
+  wavve: { color: "#1F5FFF", label: "W" }, // ~
+  watcha: { color: "#FF0558", label: "왓챠" }, // ~
+  youtube: { color: "#FF0000", label: "▶" }, // ✅
+  melon: { color: "#00CD3C", label: "멜론" }, // ~
+  spotify: { color: "#1DB954", label: "S" }, // ✅
+  flo: { color: "#3B27D9", label: "FLO" }, // ~
+  "coupang-wow": { color: "#E53935", label: "와우" }, // ~
+  "naver-plus": { color: "#03C75A", label: "N+" }, // ✅ 네이버 그린
+  "baemin-club": { color: "#2AC1BC", label: "배민" }, // ✅ 배민 민트
+  "kurly-members": { color: "#5F0080", label: "컬리" }, // ✅ 컬리 퍼플
+  "chatgpt-plus": { color: "#10A37F", label: "GPT" }, // ✅ OpenAI 그린
+  "claude-pro": { color: "#D97757", label: "C" }, // ✅
+};
+
+/**
+ * 타일에 쓸 색과 글자.
+ * 등록 안 된 서비스는 카테고리 색과 이름 첫 글자로 대신한다.
+ * (새 서비스를 넣고 브랜드 색을 아직 안 정했어도 화면이 깨지지 않는다)
+ */
+export function brandOf(serviceId: string): Brand {
+  const known = BRANDS[serviceId];
+  if (known) return known;
+
+  const service = findService(serviceId);
+  return {
+    color: service ? categoryColor(service.category) : "#9aa0a6",
+    label: service ? service.name.slice(0, 1) : "?",
+  };
+}

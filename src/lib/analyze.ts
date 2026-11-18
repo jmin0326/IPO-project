@@ -761,7 +761,10 @@ export type ActionItem = {
   badge: string;
   title: string;
   saving: number;
+  /** 한 줄로 끝나는 '무엇을 하라'. 메인 화면은 이것만 보여 준다. */
   why: string;
+  /** 왜 그런지에 대한 배경. 자세히 보기에서만 보여 준다. */
+  more?: string;
   /** 이걸 택하면 포기해야 하는 것 */
   caution?: string;
   /** caution이 '포기해야 할 것'인지, 그냥 알아 둘 내용인지 */
@@ -793,7 +796,10 @@ export function buildActionPlan(data: AppData, stats: SubscriptionStat[]) {
       badge: PORTFOLIO_LABELS[issue.kind],
       title: issue.title,
       saving: issue.saving,
-      why: `${issue.reason} ${issue.action}`,
+      // 먼저 보여 줄 건 '무엇을 하라'이고, '왜'는 뒤로 미룬다.
+      // 둘을 한 문장으로 붙여 놨더니 메인 화면에서 중간이 잘려 읽기 어려웠다.
+      why: issue.action,
+      more: issue.reason,
       cautionIsTradeoff: false,
       subscriptionIds: issue.subscriptionIds,
       alternative: false,

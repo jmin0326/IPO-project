@@ -12,6 +12,7 @@
 // 근거를 숨긴 게 아니라 '먼저 보여 줄 것'과 '찾아볼 것'을 나눈 것이다.
 
 import Link from "next/link";
+import ActionList from "@/components/ActionList";
 import SuggestionBadge from "@/components/SuggestionBadge";
 import { CATEGORIES } from "@/data/services";
 import {
@@ -70,16 +71,6 @@ export default function DiagnosisPage() {
     );
   }
 
-  // 번호는 '또 다른 방법'을 빼고 센다.
-  // 숫자를 하나씩 올려 가며 세면 '화면을 그리는 도중에 값을 바꾸는 것'이 되어
-  // 다시 그릴 때 결과가 달라질 수 있다. 그래서 앞에 몇 개가 있었는지를 세서 구한다.
-  const numbered = plan.items.map((item, index) => ({
-    item,
-    step: plan.items.filter(
-      (other, otherIndex) => otherIndex <= index && !other.alternative,
-    ).length,
-  }));
-
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-10">
       <Link href="/" className="text-sm text-ink-soft">
@@ -111,77 +102,9 @@ export default function DiagnosisPage() {
       {/* 2. 할 일 */}
       <h2 className="mt-8 text-lg font-bold text-ink">이렇게 해 보세요</h2>
 
-      {plan.items.length === 0 ? (
-        <p className="mt-3 rounded-2xl bg-white p-6 text-sm text-ink-soft shadow-sm">
-          손볼 것이 없습니다. 지금 구성이 괜찮다는 뜻입니다.
-        </p>
-      ) : (
-        <ul className="mt-3 space-y-3">
-          {numbered.map(({ item, step }) => {
-            return (
-              <li
-                key={item.key}
-                className={`rounded-2xl p-5 shadow-sm ${
-                  item.alternative ? "bg-page" : "bg-white"
-                }`}
-              >
-                <div className="flex gap-3">
-                  <span
-                    className={`flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                      item.alternative
-                        ? "bg-white text-ink-soft"
-                        : "bg-list-deep text-list-ink"
-                    }`}
-                  >
-                    {item.alternative ? "또" : step}
-                  </span>
-
-                  <div className="min-w-0 flex-1">
-                    {item.alternative && (
-                      <p className="mb-1 text-xs text-ink-soft">
-                        위 대신 이렇게 할 수도 있습니다 (둘 다는 못 합니다)
-                      </p>
-                    )}
-
-                    <p className="flex flex-wrap items-center gap-2">
-                      <span className="rounded bg-page px-1.5 py-0.5 text-[11px] font-semibold text-ink-soft">
-                        {item.badge}
-                      </span>
-                      <span className="font-semibold text-ink">{item.title}</span>
-                    </p>
-
-                    {item.saving > 0 && (
-                      <p className="mt-1 text-lg font-bold text-list-ink">
-                        매달 {won(item.saving)} 절약
-                      </p>
-                    )}
-
-                    <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-                      {item.why}
-                    </p>
-
-                    {item.caution && (
-                      <p className="mt-2 rounded-lg bg-list px-3 py-2 text-sm text-list-ink">
-                        {item.cautionIsTradeoff ? "대신 포기해야 합니다 — " : "참고 — "}
-                        {item.caution}
-                      </p>
-                    )}
-
-                    {item.subscriptionId && (
-                      <Link
-                        href={`/subscriptions/${item.subscriptionId}`}
-                        className="mt-2 inline-block text-sm font-semibold text-diag-ink"
-                      >
-                        여기서 바로 바꾸기 ›
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <div className="mt-3">
+        <ActionList items={plan.items} />
+      </div>
 
       {/* 3. 그대로 둬도 되는 것 */}
       {fine.length > 0 && (
