@@ -322,7 +322,7 @@ export default function SubscriptionDetailPage() {
         {confirmingCancel ? (
           <div className="rounded-xl bg-list p-4">
             <p className="text-sm font-semibold text-list-ink">
-              {name}을(를) 어떻게 할까요?
+              {name}{particle(name, "을", "를")} 어떻게 할까요?
             </p>
 
             <div className="mt-3 space-y-2">
