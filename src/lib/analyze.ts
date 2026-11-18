@@ -24,7 +24,7 @@ import {
   type Plan,
   type Service,
 } from "@/data/services";
-import { monthKeyOf, weekdayOf } from "./date";
+import { elapsedRatioOf, monthKeyOf, shiftMonth, weekdayOf } from "./date";
 import { particle, won } from "./format";
 import type { AppData, Subscription } from "./types";
 
@@ -70,7 +70,8 @@ export type CountSource = "logs" | "manual";
  * 더 정확하게 알려 준 값이라고 보기 때문이다.
  * 대신 화면에서 어느 쪽 값을 쓰는지 반드시 같이 보여 줘야 헷갈리지 않는다.
  */
-export function countUsage(data: AppData, subscriptionId: string, month: string) {
+/** 한 달치만 세는 속 계산 */
+function monthUsage(data: AppData, subscriptionId: string, month: string) {
   const monthLogs = data.usageLogs.filter(
     (log) => log.subscriptionId === subscriptionId && monthKeyOf(log.date) === month,
   );
@@ -86,12 +87,63 @@ export function countUsage(data: AppData, subscriptionId: string, month: string)
   return {
     loggedCount: monthLogs.length,
     manualCount,
-    usageCount: manualCount ?? monthLogs.length,
-    countSource: (manualCount !== null ? "manual" : "logs") as CountSource,
-    /** 이번 달 총 이용 시간(분). 시간을 안 적었으면 0 */
+    count: manualCount ?? monthLogs.length,
+    source: (manualCount !== null ? "manual" : "logs") as CountSource,
+    /** 그 달 총 이용 시간(분). 시간을 안 적었으면 0 */
     totalMinutes: minutes,
     /** 시간을 적은 기록 한 번당 평균 분. 적은 기록이 없으면 null */
     averageMinutes: minutesLogged > 0 ? Math.round(minutes / minutesLogged) : null,
+    /** 그 달에 기록이 하나라도 있었는지 */
+    hasRecord: monthLogs.length > 0 || manualCount !== null,
+  };
+}
+
+/**
+ * 판정에 쓸 이용 횟수를 구한다.
+ *
+ * 그냥 '이번 달 몇 회'로 세면 월초에 사고가 난다.
+ * 기준선은 한 달치인데 월초에는 아직 며칠 안 지나서, 매일 보는 사람도
+ * "거의 안 씀"이 되어 버린다. 실제로 11월 1일에는 모든 구독이
+ * '한 번도 안 씀 → 해지'로 바뀌었다.
+ *
+ * 그래서 **이번 달에서 아직 안 지난 만큼을 지난달 기록으로 채운다.**
+ *
+ *   판정용 = 이번 달 횟수 + (남은 비율 × 지난달 횟수)
+ *
+ * 월초에는 지난달을 많이, 월말로 갈수록 적게 반영하므로 중간에 값이 확 튀지 않고,
+ * 말일에는 보정이 0이 되어 '이번 달 횟수' 그대로가 된다.
+ * 지난달에도 안 썼으면 채울 게 없으니 월초에도 그대로 해지 추천이 나온다.
+ *
+ * 한계: 이번 달에 진짜로 줄인 사람은 월중에 실제보다 좋게 보인다.
+ * '성급한 해지 추천을 줄인다'와 맞바꾼 부분이고, 월말로 갈수록 사라진다.
+ */
+export function countUsage(data: AppData, subscriptionId: string, today: string) {
+  const month = monthKeyOf(today);
+  const thisMonth = monthUsage(data, subscriptionId, month);
+  const lastMonth = monthUsage(data, subscriptionId, shiftMonth(month, -1));
+
+  const elapsedRatio = elapsedRatioOf(today);
+  const carried = Math.round((1 - elapsedRatio) * lastMonth.count);
+
+  return {
+    loggedCount: thisMonth.loggedCount,
+    manualCount: thisMonth.manualCount,
+    countSource: thisMonth.source,
+    totalMinutes: thisMonth.totalMinutes,
+    averageMinutes: thisMonth.averageMinutes,
+
+    /** 이번 달에 실제로 쓴 횟수 (화면에 사실대로 보여 줄 값) */
+    thisMonthCount: thisMonth.count,
+    /** 지난달에 쓴 횟수 */
+    lastMonthCount: lastMonth.count,
+    /** 이번 달이 얼마나 지났는지 (0~1) */
+    elapsedRatio,
+    /** 지난달에서 끌어와 채운 몫 */
+    carried,
+    /** 지난달 기록이 아예 없으면 보정할 수가 없다 */
+    hasLastMonth: lastMonth.hasRecord,
+    /** 판정에 쓰는 값 */
+    usageCount: thisMonth.count + carried,
   };
 }
 
@@ -339,7 +391,7 @@ function buildSuggestions(
       kind: "cancel",
       title: "해지하기",
       saving: price,
-      reason: "이번 달에 한 번도 쓰지 않았습니다",
+      reason: "최근 한 달 동안 한 번도 쓰지 않았습니다",
       tradeoff: "나중에 다시 필요하면 그때 가입하면 됩니다",
     });
   }
@@ -349,7 +401,7 @@ function buildSuggestions(
       kind: "cancel",
       title: "해지하기",
       saving: price,
-      reason: `이번 달에 ${usageCount}번밖에 쓰지 않았습니다`,
+      reason: `최근 한 달 동안 ${usageCount}번밖에 쓰지 않았습니다`,
       tradeoff: "나중에 다시 필요하면 그때 가입하면 됩니다",
     });
 
@@ -466,6 +518,17 @@ export type SubscriptionStat = {
   color: string;
   loggedCount: number;
   manualCount: number | null;
+  /** 이번 달에 실제로 쓴 횟수 */
+  thisMonthCount: number;
+  /** 지난달에 쓴 횟수 */
+  lastMonthCount: number;
+  /** 지난달에서 끌어와 채운 몫. 0이면 보정 안 함 */
+  carried: number;
+  /** 이번 달이 얼마나 지났는지 (0~1) */
+  elapsedRatio: number;
+  /** 지난달 기록이 있는지. 없으면 보정할 수 없다 */
+  hasLastMonth: boolean;
+  /** 판정에 쓰는 횟수 (이번 달 + 지난달에서 채운 몫) */
   usageCount: number;
   countSource: CountSource;
   totalMinutes: number;
@@ -477,12 +540,15 @@ export type SubscriptionStat = {
   primary: Suggestion;
 };
 
-export function buildStats(data: AppData, month: string): SubscriptionStat[] {
+/**
+ * 오늘 날짜("YYYY-MM-DD")를 받는다. 달만 받으면 월초 보정을 할 수 없어서다.
+ */
+export function buildStats(data: AppData, today: string): SubscriptionStat[] {
   // 다른 멤버십에 이미 포함된 서비스는 추천 자체가 달라진다.
   const covered = coveredServiceIds(data);
 
   return data.subscriptions.map((subscription) => {
-    const counted = countUsage(data, subscription.id, month);
+    const counted = countUsage(data, subscription.id, today);
     const service = findService(subscription.serviceId);
 
     // 요금제를 저장하기 전에 등록한 구독이 있을 수 있어서, 없으면 금액으로 찾아 준다.
@@ -727,7 +793,7 @@ export function findPortfolioIssues(
         kind: "focus",
         title: `${category.label} ${paying.length}개 중 ${main.name}만 쓰고 있습니다`,
         saving: restSaving,
-        reason: `이번 달 이용 횟수가 ${main.name} ${main.usageCount}회, ${rest
+        reason: `최근 이용 횟수가 ${main.name} ${main.usageCount}회, ${rest
           .map((stat) => `${stat.name} ${stat.usageCount}회`)
           .join(", ")}입니다.`,
         action: `${restNames}${particle(restNames, "을", "를")} 해지하고 ${main.name}에 몰아 쓰는 편이 낫습니다.${upgradeText}`,
@@ -742,7 +808,7 @@ export function findPortfolioIssues(
         kind: "consolidate",
         title: `${category.label}${particle(category.label, "을", "를")} ${paying.length}개나 들고 있습니다`,
         saving: restSaving,
-        reason: `${paying.length}개를 합쳐도 이번 달에 ${totalUse}번밖에 안 썼습니다.`,
+        reason: `${paying.length}개를 합쳐도 최근 한 달 동안 ${totalUse}번밖에 안 썼습니다.`,
         action: `가장 많이 쓴 ${main.name} 하나만 남기는 것을 생각해 보세요`,
         subscriptionIds: rest.map((stat) => stat.subscription.id),
       });
@@ -921,7 +987,7 @@ export const HABIT_RULES: HabitRule[] = [
   {
     type: "방치형",
     oneLine: "결제는 하지만 손은 잘 안 가요",
-    criteria: "이번 달에 한 번도 안 쓴 구독이 1개 이상 있다",
+    criteria: "최근 한 달 동안 한 번도 안 쓴 구독이 1개 이상 있다",
     matches: (facts) => facts.unusedCount >= 1,
   },
   {

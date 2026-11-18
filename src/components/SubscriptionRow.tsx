@@ -20,7 +20,7 @@ type Props = {
 };
 
 export default function SubscriptionRow({ stat, usedToday, onToggleToday }: Props) {
-  const { subscription, name, planName, usageCount, primary } = stat;
+  const { subscription, name, planName, primary } = stat;
 
   return (
     <li className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm">
@@ -36,7 +36,10 @@ export default function SubscriptionRow({ stat, usedToday, onToggleToday }: Prop
             <SuggestionBadge kind={primary.kind} />
           </span>
           <span className="mt-0.5 block truncate text-xs text-ink-soft">
-            {planName} · 월 {usageCount}회 ({INTENSITY_LABELS[stat.intensity]})
+            {planName} · 이번 달 {stat.thisMonthCount}회
+            {/* 월초에는 지난달에서 채운 몫이 있으므로 숨기지 않고 같이 적는다 */}
+            {stat.carried > 0 && ` + 지난달 ${stat.carried}회`} (
+            {INTENSITY_LABELS[stat.intensity]})
           </span>
         </span>
 

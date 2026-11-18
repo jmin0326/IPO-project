@@ -45,11 +45,13 @@ export default function DiagnosisPage() {
   }
 
   const month = monthKeyOf(today);
-  const stats = buildStats(data, month);
+  const stats = buildStats(data, today);
   const ranked = sortByPriority(stats);
   const habit = judgeHabit(stats);
   const total = totalMonthlyCost(stats);
   const plan = buildActionPlan(data, stats);
+  // 월초 보정이 실제로 걸린 구독이 하나라도 있는지
+  const anyCarried = stats.some((stat) => stat.carried > 0);
 
   // 할 일 목록에 한 번도 안 나온 구독 = 그대로 둬도 되는 것
   const fine = ranked.filter((stat) => !plan.touched.has(stat.subscription.id));
@@ -122,7 +124,7 @@ export default function DiagnosisPage() {
                 />
                 <span className="font-semibold text-ink">{stat.name}</span>
                 <span className="text-ink-soft">
-                  월 {stat.usageCount}회 · {INTENSITY_LABELS[stat.intensity]}
+                  최근 {stat.usageCount}회 · {INTENSITY_LABELS[stat.intensity]}
                 </span>
                 <SuggestionBadge kind={stat.primary.kind} />
               </li>
@@ -140,10 +142,26 @@ export default function DiagnosisPage() {
         <div className="mt-5 space-y-6 text-sm">
           <div>
             <h3 className="font-semibold text-ink">1. 얼마나 썼는지 셉니다</h3>
-            <p className="mt-1 text-xs text-ink-soft">
+            <p className="mt-1 text-xs leading-relaxed text-ink-soft">
               달력에 남긴 기록을 세되, 월 단위로 몰아서 입력한 값이 있으면 그쪽을
               씁니다.
+              {anyCarried && (
+                <>
+                  {" "}
+                  그리고 <strong>이번 달은 아직 다 지나지 않았기 때문에</strong>, 남은
+                  만큼은 지난달 기록으로 채워서 봅니다. 그냥 이번 달 횟수만 보면
+                  월초에는 매일 쓰는 사람도 &lsquo;거의 안 씀&rsquo;이 되어 해지하라는
+                  말이 나옵니다.
+                </>
+              )}
             </p>
+
+            {anyCarried && (
+              <p className="mt-2 rounded-lg bg-diag px-3 py-2 font-mono text-xs text-diag-ink">
+                판정용 = 이번 달 + (남은 비율 × 지난달)
+              </p>
+            )}
+
             <ul className="mt-2 space-y-1">
               {stats.map((stat) => (
                 <li
@@ -152,8 +170,13 @@ export default function DiagnosisPage() {
                 >
                   <span className="text-ink">{stat.name}</span>
                   <span className="text-ink-soft">
-                    {stat.usageCount}회
+                    이번 달 {stat.thisMonthCount}회
                     {stat.countSource === "manual" && " (몰아 입력)"}
+                    {stat.carried > 0 &&
+                      ` + 지난달 ${stat.lastMonthCount}회 중 ${stat.carried}회`}
+                    {stat.carried > 0 && (
+                      <strong className="text-ink"> = {stat.usageCount}회</strong>
+                    )}
                     {stat.averageMinutes !== null &&
                       ` · 한 번에 평균 ${stat.averageMinutes}분`}
                   </span>

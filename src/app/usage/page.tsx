@@ -77,7 +77,7 @@ export default function UsagePage() {
               const { loggedCount, manualCount } = countUsage(
                 data,
                 subscription.id,
-                month,
+                today,
               );
               const value =
                 draft[subscription.id] ??

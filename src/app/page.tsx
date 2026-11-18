@@ -27,7 +27,6 @@ import {
   sortByPriority,
   totalMonthlyCost,
 } from "@/lib/analyze";
-import { monthKeyOf } from "@/lib/date";
 import { won } from "@/lib/format";
 import { clearAll, loadSampleData, toggleUsageLog, useAppData } from "@/lib/store";
 import { useToday } from "@/lib/today";
@@ -49,8 +48,7 @@ export default function Home() {
     );
   }
 
-  const thisMonth = monthKeyOf(today);
-  const stats = buildStats(data, thisMonth);
+  const stats = buildStats(data, today);
   const ranked = sortByPriority(stats);
   const habit = judgeHabit(stats);
   const plan = buildActionPlan(data, stats);

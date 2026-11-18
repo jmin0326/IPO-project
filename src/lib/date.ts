@@ -81,6 +81,20 @@ export function formatDateKey(dateKey: string): string {
 }
 
 /**
+ * 그 달이 얼마나 지났는지 0~1 로 돌려준다.
+ *
+ * 11월 1일이면 1/30 ≈ 0.03, 11월 30일이면 1.
+ * "이번 달 이용 횟수"를 한 달치 기준과 비교할 때, 월초에는 아직 날이
+ * 얼마 안 지났다는 걸 감안해야 해서 쓴다.
+ */
+export function elapsedRatioOf(dateKey: string): number {
+  const day = Number(dateKey.slice(8, 10));
+  const total = daysInMonth(monthKeyOf(dateKey));
+  if (!Number.isFinite(day) || total <= 0) return 1;
+  return Math.min(1, Math.max(0, day / total));
+}
+
+/**
  * 결제일이 그 달에 실제로 존재하는 날인지 맞춰 준다.
  * 31일 결제인데 2월이면 28(29)일로 당긴다.
  */

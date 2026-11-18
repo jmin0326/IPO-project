@@ -52,7 +52,7 @@ export default function SubscriptionDetailPage() {
   }
 
   const month = monthKeyOf(today);
-  const ranked = sortByPriority(buildStats(data, month));
+  const ranked = sortByPriority(buildStats(data, today));
 
   const index = ranked.findIndex((item) => item.subscription.id === params.id);
   const stat = index >= 0 ? ranked[index] : undefined;
@@ -136,7 +136,17 @@ export default function SubscriptionDetailPage() {
             </div>
             <div className="flex justify-between">
               <dt>{formatMonthKey(month)} 이용</dt>
-              <dd className="text-ink">{usageCount}회</dd>
+              <dd className="text-ink">{stat.thisMonthCount}회</dd>
+            </div>
+            {stat.carried > 0 && (
+              <div className="flex justify-between">
+                <dt>지난달에서 반영</dt>
+                <dd className="text-ink">+{stat.carried}회</dd>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <dt>판정에 쓴 횟수</dt>
+              <dd className="font-semibold text-ink">{usageCount}회</dd>
             </div>
             {stat.costPerUse !== null && (
               <div className="flex justify-between">
