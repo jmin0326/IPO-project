@@ -15,6 +15,7 @@
 
 import { useSyncExternalStore } from "react";
 import { SEED_DATA } from "@/data/seed";
+import { daysInMonth } from "./date";
 import { currentUserId, subscribeAuth } from "./session";
 import { supabase } from "./supabaseClient";
 import type { AppData, MonthlyCount, Subscription, UsageLog } from "./types";
@@ -59,6 +60,9 @@ type SubscriptionRow = {
   plan_id: string;
   monthly_price: number;
   billing_day: number;
+  ended_on: string | null;
+  custom_name: string | null;
+  custom_category: string | null;
 };
 
 type UsageLogRow = {
@@ -82,6 +86,9 @@ function toSubscription(row: SubscriptionRow): Subscription {
     planId: row.plan_id,
     monthlyPrice: row.monthly_price,
     billingDay: row.billing_day,
+    endedOn: row.ended_on ?? null,
+    customName: row.custom_name ?? null,
+    customCategory: row.custom_category ?? null,
   };
 }
 
@@ -201,6 +208,8 @@ export async function addSubscription(input: Omit<Subscription, "id">) {
       plan_id: input.planId,
       monthly_price: input.monthlyPrice,
       billing_day: input.billingDay,
+      custom_name: input.customName,
+      custom_category: input.customCategory,
     })
     .select()
     .single();
@@ -268,10 +277,51 @@ export async function changeSubscriptionService(
 }
 
 /**
- * 구독을 지운다.
+ * 해지한다. 행을 지우지 않고 '끝난 날'만 적는다.
+ *
+ * 예전에는 행을 지웠고 딸린 이용 기록도 cascade 로 같이 사라졌다.
+ * 몇 달치 기록이 한 번에 없어지는 건 과한 처리다.
+ * 이렇게 해 두면 달력에서 지난 기록을 그대로 볼 수 있고,
+ * 해지한 날 이후로는 더 기록되지 않는다.
+ */
+export async function endSubscription(subscriptionId: string, endedOn: string) {
+  setData({
+    ...state.data,
+    subscriptions: state.data.subscriptions.map((item) =>
+      item.id === subscriptionId ? { ...item, endedOn } : item,
+    ),
+  });
+
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({ ended_on: endedOn })
+    .eq("id", subscriptionId);
+
+  if (error) await failAndResync(`해지하지 못했습니다: ${error.message}`);
+}
+
+/** 해지를 되돌린다. (잘못 눌렀을 때) */
+export async function resumeSubscription(subscriptionId: string) {
+  setData({
+    ...state.data,
+    subscriptions: state.data.subscriptions.map((item) =>
+      item.id === subscriptionId ? { ...item, endedOn: null } : item,
+    ),
+  });
+
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({ ended_on: null })
+    .eq("id", subscriptionId);
+
+  if (error) await failAndResync(`되돌리지 못했습니다: ${error.message}`);
+}
+
+/**
+ * 구독과 이용 기록을 통째로 지운다. (잘못 등록했을 때)
  *
  * 딸린 이용 기록과 몰아 입력은 DB가 알아서 같이 지운다.
- * (schema.sql 의 on delete cascade) 앱에서 하나씩 지우는 것보다 안전하다.
+ * (schema.sql 의 on delete cascade)
  */
 export async function removeSubscription(subscriptionId: string) {
   setData({
@@ -406,7 +456,9 @@ export async function setMonthlyCount(
     return;
   }
 
-  const value = Math.floor(count);
+  // 이용 기록은 '하루에 한 번'이 원칙이라(달력에서도 하루 하나만 남는다)
+  // 한 달 이용 횟수가 그 달 일수를 넘을 수 없다. 넘겨 적으면 잘라 준다.
+  const value = Math.min(Math.floor(count), daysInMonth(month));
   const rest = state.data.monthlyCounts.filter(
     (item) => !(item.subscriptionId === subscriptionId && item.month === month),
   );

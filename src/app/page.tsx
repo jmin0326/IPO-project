@@ -18,6 +18,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import ActionList from "@/components/ActionList";
+import BillingSoon from "@/components/BillingSoon";
 import DiagnosisCard from "@/components/DiagnosisCard";
 import SubscriptionRow from "@/components/SubscriptionRow";
 import {
@@ -27,8 +28,15 @@ import {
   sortByPriority,
   totalMonthlyCost,
 } from "@/lib/analyze";
+import { serviceName } from "@/data/services";
 import { won } from "@/lib/format";
-import { clearAll, loadSampleData, toggleUsageLog, useAppData } from "@/lib/store";
+import {
+  clearAll,
+  loadSampleData,
+  resumeSubscription,
+  toggleUsageLog,
+  useAppData,
+} from "@/lib/store";
 import { useToday } from "@/lib/today";
 import { useIsClient } from "@/lib/useIsClient";
 
@@ -52,6 +60,9 @@ export default function Home() {
   const ranked = sortByPriority(stats);
   const habit = judgeHabit(stats);
   const plan = buildActionPlan(data, stats);
+  const endedSubscriptions = data.subscriptions.filter(
+    (item) => item.endedOn !== null,
+  );
   const total = totalMonthlyCost(stats);
 
   return (
@@ -61,8 +72,13 @@ export default function Home() {
         얼마나 쓰는지 기록하면, 끊을지 낮출지 바꿀지 골라 드립니다.
       </p>
 
-      {/* 1층 — 결론 */}
+      {/* 0층 — 곧 결제되는 것부터. 지나가면 되돌릴 수 없는 일이라 맨 위에 둔다. */}
       <div className="mt-6">
+        <BillingSoon stats={stats} today={today} />
+      </div>
+
+      {/* 1층 — 결론 */}
+      <div className="mt-4">
         <DiagnosisCard
           habitType={habit.type}
           oneLineDiagnosis={habit.oneLine}
@@ -126,6 +142,38 @@ export default function Home() {
           + 구독 추가
         </Link>
       </section>
+
+      {/* 해지한 구독 — 기록은 남아 있다 */}
+      {endedSubscriptions.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-ink">해지한 구독</h2>
+          <p className="mt-1 text-xs text-ink-soft">
+            진단에서는 빠지지만 달력의 지난 기록은 그대로 남아 있습니다.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {endedSubscriptions.map((subscription) => (
+              <li
+                key={subscription.id}
+                className="flex flex-wrap items-center gap-2 rounded-xl bg-page px-4 py-3 text-sm"
+              >
+                <span className="font-semibold text-ink-soft">
+                  {subscription.customName ?? serviceName(subscription.serviceId)}
+                </span>
+                <span className="text-xs text-ink-soft">
+                  {subscription.endedOn}에 해지
+                </span>
+                <button
+                  type="button"
+                  onClick={() => resumeSubscription(subscription.id)}
+                  className="ml-auto text-xs text-diag-ink underline underline-offset-2"
+                >
+                  다시 구독 중으로
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* 기록하는 도구들 */}
       <nav className="mt-8 grid gap-2 sm:grid-cols-2">

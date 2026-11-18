@@ -541,15 +541,52 @@ export type SubscriptionStat = {
 };
 
 /**
+ * 목록에 없어서 직접 입력한 서비스를 위해 Service 모양을 그 자리에서 만든다.
+ *
+ * 우리가 아는 건 이름·카테고리·사용자가 적은 금액뿐이다.
+ * 요금제가 하나뿐이라 '요금제 낮추기'는 나올 수 없고,
+ * reach 를 모르니 '더 폭넓게 쓰이는 서비스로'도 나오지 않는다.
+ * 대신 카테고리를 알기 때문에 '더 싼 서비스로'와 해지·유지는 그대로 판단한다.
+ */
+function customService(subscription: Subscription): Service | undefined {
+  if (!subscription.customName) return undefined;
+
+  const category = (subscription.customCategory ?? "ott") as CategoryId;
+  return {
+    id: subscription.serviceId,
+    name: subscription.customName,
+    category,
+    defaultPlanId: subscription.planId,
+    plans: [
+      {
+        id: subscription.planId,
+        name: "직접 입력",
+        price: subscription.monthlyPrice,
+        ads: false,
+      },
+    ],
+    strength: "",
+    weakness: "직접 등록한 서비스라 다른 서비스와 비교할 정보가 없습니다",
+  };
+}
+
+/** 아직 쓰고 있는 구독만. 해지한 것은 진단에서 뺀다. */
+export function activeSubscriptions(data: AppData): Subscription[] {
+  return data.subscriptions.filter((item) => item.endedOn === null);
+}
+
+/**
  * 오늘 날짜("YYYY-MM-DD")를 받는다. 달만 받으면 월초 보정을 할 수 없어서다.
+ * 해지한 구독은 빼고 센다. 기록은 남아 있지만 더 이상 손볼 대상이 아니다.
  */
 export function buildStats(data: AppData, today: string): SubscriptionStat[] {
   // 다른 멤버십에 이미 포함된 서비스는 추천 자체가 달라진다.
   const covered = coveredServiceIds(data);
 
-  return data.subscriptions.map((subscription) => {
+  return activeSubscriptions(data).map((subscription) => {
     const counted = countUsage(data, subscription.id, today);
-    const service = findService(subscription.serviceId);
+    const service =
+      findService(subscription.serviceId) ?? customService(subscription);
 
     // 요금제를 저장하기 전에 등록한 구독이 있을 수 있어서, 없으면 금액으로 찾아 준다.
     const plan =
@@ -572,8 +609,8 @@ export function buildStats(data: AppData, today: string): SubscriptionStat[] {
       subscription,
       service,
       plan,
-      name: serviceName(subscription.serviceId),
-      planName: plan?.name ?? "요금제 모름",
+      name: subscription.customName ?? serviceName(subscription.serviceId),
+      planName: plan?.name ?? (subscription.customName ? "직접 입력" : "요금제 모름"),
       color: serviceColor(subscription.serviceId),
       ...counted,
       costPerUse: costPerUse(subscription.monthlyPrice, counted.usageCount),

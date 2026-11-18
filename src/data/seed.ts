@@ -23,6 +23,9 @@ const SEED_SUBSCRIPTIONS: Subscription[] = [
     planId: "netflix-standard",
     monthlyPrice: 13500,
     billingDay: 15,
+    endedOn: null,
+    customName: null,
+    customCategory: null,
   },
   {
     id: "sub-tving",
@@ -30,6 +33,9 @@ const SEED_SUBSCRIPTIONS: Subscription[] = [
     planId: "tving-standard",
     monthlyPrice: 13500,
     billingDay: 8,
+    endedOn: null,
+    customName: null,
+    customCategory: null,
   },
   {
     id: "sub-coupang-wow",
@@ -37,6 +43,9 @@ const SEED_SUBSCRIPTIONS: Subscription[] = [
     planId: "coupang-wow-basic",
     monthlyPrice: 7890,
     billingDay: 3,
+    endedOn: null,
+    customName: null,
+    customCategory: null,
   },
   {
     id: "sub-coupang-play",
@@ -44,6 +53,9 @@ const SEED_SUBSCRIPTIONS: Subscription[] = [
     planId: "coupang-play-wow",
     monthlyPrice: 7890,
     billingDay: 3,
+    endedOn: null,
+    customName: null,
+    customCategory: null,
   },
   {
     id: "sub-youtube",
@@ -51,6 +63,9 @@ const SEED_SUBSCRIPTIONS: Subscription[] = [
     planId: "youtube-premium",
     monthlyPrice: 14900,
     billingDay: 22,
+    endedOn: null,
+    customName: null,
+    customCategory: null,
   },
   {
     id: "sub-spotify",
@@ -58,6 +73,9 @@ const SEED_SUBSCRIPTIONS: Subscription[] = [
     planId: "spotify-basic",
     monthlyPrice: 8690,
     billingDay: 11,
+    endedOn: null,
+    customName: null,
+    customCategory: null,
   },
 ];
 

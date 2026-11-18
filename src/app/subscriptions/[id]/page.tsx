@@ -28,6 +28,7 @@ import { particle, won } from "@/lib/format";
 import {
   changeSubscriptionPlan,
   changeSubscriptionService,
+  endSubscription,
   removeSubscription,
   useAppData,
 } from "@/lib/store";
@@ -97,7 +98,15 @@ export default function SubscriptionDetailPage() {
     router.push("/");
   }
 
-  function handleCancel() {
+  // 해지는 기록을 지우지 않는다. '그만 쓰기 시작한 날'만 적어 둔다.
+  // 몇 달치 이용 기록이 한 번에 날아가면 나중에 다시 가입할지 판단할 근거도 없어진다.
+  function handleEnd() {
+    endSubscription(subscription.id, today);
+    router.push("/");
+  }
+
+  // 잘못 등록한 경우를 위해 통째로 지우는 길도 남겨 둔다.
+  function handleDelete() {
     removeSubscription(subscription.id);
     router.push("/");
   }
@@ -311,24 +320,41 @@ export default function SubscriptionDetailPage() {
       {/* 결정 버튼 */}
       <div className="mt-5">
         {confirmingCancel ? (
-          <div className="rounded-xl bg-list p-4 text-center">
-            <p className="text-sm text-list-ink">
-              정말 목록에서 지울까요? {name} 이용 기록도 같이 지워집니다.
+          <div className="rounded-xl bg-list p-4">
+            <p className="text-sm font-semibold text-list-ink">
+              {name}을(를) 어떻게 할까요?
             </p>
-            <div className="mt-2 flex justify-center gap-2">
+
+            <div className="mt-3 space-y-2">
               <button
                 type="button"
-                onClick={handleCancel}
-                className="rounded-lg bg-list-deep px-4 py-2 text-sm font-semibold text-list-ink"
+                onClick={handleEnd}
+                className="w-full rounded-lg bg-list-deep px-4 py-3 text-left text-sm font-semibold text-list-ink"
               >
-                네, 해지합니다
+                해지하기
+                <span className="mt-0.5 block text-xs font-normal">
+                  오늘부터 그만 씁니다. 지금까지의 이용 기록은 달력에 그대로
+                  남습니다.
+                </span>
               </button>
+
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="w-full rounded-lg bg-white px-4 py-3 text-left text-sm font-semibold text-ink-soft"
+              >
+                기록까지 완전히 지우기
+                <span className="mt-0.5 block text-xs font-normal">
+                  잘못 등록한 경우에만 쓰세요. 되돌릴 수 없습니다.
+                </span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setConfirmingCancel(false)}
-                className="rounded-lg px-4 py-2 text-sm text-ink-soft"
+                className="w-full rounded-lg px-4 py-2 text-sm text-ink-soft"
               >
-                아니요
+                아니요, 그대로 둘게요
               </button>
             </div>
           </div>

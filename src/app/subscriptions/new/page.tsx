@@ -5,8 +5,8 @@
 // 서비스를 고르면 요금제 목록이 나오고, 요금제를 고르면 조사해 둔 요금이
 // 자동으로 채워진다. 실제로 내는 금액이 다르면 사용자가 고쳐서 저장한다.
 //
-// 요금제를 받아 두는 이유: 나중에 "광고형으로 낮추세요" 같은 추천을 하려면
-// 지금 어떤 요금제를 쓰는지 알아야 한다.
+// 목록에 없는 서비스도 직접 입력할 수 있다.
+// 목록은 21개뿐이라, 거기 없는 걸 쓰는 사람은 아예 등록을 못 했다.
 
 import { useState } from "react";
 import Link from "next/link";
@@ -18,9 +18,13 @@ import {
   defaultPlanOf,
   findPlan,
   findService,
+  type CategoryId,
 } from "@/data/services";
 import { won } from "@/lib/format";
 import { addSubscription } from "@/lib/store";
+
+/** 서비스 고르는 칸에서 '목록에 없어요'를 나타내는 값 */
+const CUSTOM = "__custom__";
 
 export default function NewSubscriptionPage() {
   const router = useRouter();
@@ -29,14 +33,23 @@ export default function NewSubscriptionPage() {
   const [planId, setPlanId] = useState("");
   const [price, setPrice] = useState("");
   const [billingDay, setBillingDay] = useState("1");
+  const [customName, setCustomName] = useState("");
+  const [customCategory, setCustomCategory] = useState<CategoryId>("ott");
   const [error, setError] = useState("");
 
-  const selectedService = findService(serviceId);
+  const isCustom = serviceId === CUSTOM;
+  const selectedService = isCustom ? undefined : findService(serviceId);
   const selectedPlan = selectedService ? findPlan(serviceId, planId) : undefined;
 
   function handleServiceChange(nextId: string) {
     setServiceId(nextId);
     setError("");
+
+    if (nextId === CUSTOM) {
+      setPlanId("");
+      setPrice("");
+      return;
+    }
 
     const service = findService(nextId);
     if (!service) {
@@ -59,15 +72,38 @@ export default function NewSubscriptionPage() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-
-    if (!selectedService || !selectedPlan) {
-      setError("서비스와 요금제를 골라 주세요.");
-      return;
-    }
+    setError("");
 
     const monthlyPrice = Number(price);
     if (!Number.isFinite(monthlyPrice) || monthlyPrice <= 0) {
       setError("월 요금을 0보다 큰 숫자로 입력해 주세요.");
+      return;
+    }
+
+    if (isCustom) {
+      const name = customName.trim();
+      if (!name) {
+        setError("서비스 이름을 입력해 주세요.");
+        return;
+      }
+
+      // 같은 이름으로 또 넣으면 같은 서비스로 보이도록 이름에서 id 를 만든다.
+      const slug = name.toLowerCase().replace(/\s+/g, "-");
+      addSubscription({
+        serviceId: `custom-${slug}`,
+        planId: "custom-plan",
+        monthlyPrice: Math.round(monthlyPrice),
+        billingDay: Number(billingDay),
+        endedOn: null,
+        customName: name,
+        customCategory,
+      });
+      router.push("/");
+      return;
+    }
+
+    if (!selectedService || !selectedPlan) {
+      setError("서비스와 요금제를 골라 주세요.");
       return;
     }
 
@@ -76,6 +112,9 @@ export default function NewSubscriptionPage() {
       planId: selectedPlan.id,
       monthlyPrice: Math.round(monthlyPrice),
       billingDay: Number(billingDay),
+      endedOn: null,
+      customName: null,
+      customCategory: null,
     });
 
     router.push("/");
@@ -112,34 +151,70 @@ export default function NewSubscriptionPage() {
                 )}
               </optgroup>
             ))}
+            <option value={CUSTOM}>목록에 없어요 — 직접 입력</option>
           </select>
         </label>
 
-        <label className="block rounded-xl bg-diag p-4">
-          <span className="text-sm text-diag-ink">요금제</span>
-          <select
-            value={planId}
-            onChange={(event) => handlePlanChange(event.target.value)}
-            disabled={!selectedService}
-            className="mt-1 w-full bg-transparent text-lg text-ink outline-none disabled:text-ink-soft"
-          >
-            {!selectedService && <option value="">서비스를 먼저 고르세요</option>}
-            {selectedService?.plans.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                {plan.name} · {won(plan.price)}
-              </option>
-            ))}
-          </select>
+        {isCustom ? (
+          <>
+            <label className="block rounded-xl bg-diag p-4">
+              <span className="text-sm text-diag-ink">서비스 이름</span>
+              <input
+                type="text"
+                value={customName}
+                onChange={(event) => setCustomName(event.target.value)}
+                placeholder="예: 라프텔"
+                className="mt-1 w-full bg-transparent text-lg text-ink outline-none"
+              />
+            </label>
 
-          {selectedPlan && (
-            <span className="mt-1 block text-xs text-diag-ink/80">
-              {selectedPlan.ads ? "광고 있음" : "광고 없음"}
-              {selectedPlan.quality && ` · ${selectedPlan.quality}`}
-              {selectedPlan.devices && ` · 동시 ${selectedPlan.devices}대`}
-              {selectedPlan.note && ` · ${selectedPlan.note}`}
-            </span>
-          )}
-        </label>
+            <label className="block rounded-xl bg-diag p-4">
+              <span className="text-sm text-diag-ink">카테고리</span>
+              <select
+                value={customCategory}
+                onChange={(event) =>
+                  setCustomCategory(event.target.value as CategoryId)
+                }
+                className="mt-1 w-full bg-transparent text-lg text-ink outline-none"
+              >
+                {CATEGORIES.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-diag-ink/80">
+                같은 카테고리끼리 비교하므로 가장 비슷한 쪽을 골라 주세요.
+              </span>
+            </label>
+          </>
+        ) : (
+          <label className="block rounded-xl bg-diag p-4">
+            <span className="text-sm text-diag-ink">요금제</span>
+            <select
+              value={planId}
+              onChange={(event) => handlePlanChange(event.target.value)}
+              disabled={!selectedService}
+              className="mt-1 w-full bg-transparent text-lg text-ink outline-none disabled:text-ink-soft"
+            >
+              {!selectedService && <option value="">서비스를 먼저 고르세요</option>}
+              {selectedService?.plans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name} · {won(plan.price)}
+                </option>
+              ))}
+            </select>
+
+            {selectedPlan && (
+              <span className="mt-1 block text-xs text-diag-ink/80">
+                {selectedPlan.ads ? "광고 있음" : "광고 없음"}
+                {selectedPlan.quality && ` · ${selectedPlan.quality}`}
+                {selectedPlan.devices && ` · 동시 ${selectedPlan.devices}대`}
+                {selectedPlan.note && ` · ${selectedPlan.note}`}
+              </span>
+            )}
+          </label>
+        )}
 
         <label className="block rounded-xl bg-diag p-4">
           <span className="text-sm text-diag-ink">실제로 내는 월 요금 (원)</span>
@@ -175,17 +250,27 @@ export default function NewSubscriptionPage() {
           </select>
         </label>
 
-        <div className="rounded-xl bg-page p-4">
-          <span className="text-sm text-ink-soft">카테고리</span>
-          <p className="mt-1 text-lg text-ink">
-            {selectedService
-              ? categoryLabel(selectedService.category)
-              : "서비스를 고르면 정해집니다"}
+        {!isCustom && (
+          <div className="rounded-xl bg-page p-4">
+            <span className="text-sm text-ink-soft">카테고리</span>
+            <p className="mt-1 text-lg text-ink">
+              {selectedService
+                ? categoryLabel(selectedService.category)
+                : "서비스를 고르면 정해집니다"}
+            </p>
+            <span className="text-xs text-ink-soft">
+              갈아탈 서비스는 같은 카테고리 안에서 찾기 때문에 자동으로 정해집니다.
+            </span>
+          </div>
+        )}
+
+        {isCustom && (
+          <p className="rounded-xl bg-page p-4 text-xs leading-relaxed text-ink-soft">
+            ※ 직접 입력한 서비스는 요금제가 하나뿐이라 &lsquo;요금제 낮추기&rsquo;
+            추천이 나오지 않습니다. 해지·유지 판단과 같은 카테고리의 더 싼 서비스
+            추천은 그대로 됩니다.
           </p>
-          <span className="text-xs text-ink-soft">
-            갈아탈 서비스는 같은 카테고리 안에서 찾기 때문에 자동으로 정해집니다.
-          </span>
-        </div>
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

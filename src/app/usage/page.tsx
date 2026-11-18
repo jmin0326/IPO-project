@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { serviceColor, serviceName } from "@/data/services";
 import { countUsage } from "@/lib/analyze";
-import { formatMonthKey, monthKeyOf } from "@/lib/date";
+import { daysInMonth, formatMonthKey, monthKeyOf } from "@/lib/date";
 import { clearMonthlyCount, setMonthlyCount, useAppData } from "@/lib/store";
 import { useToday } from "@/lib/today";
 import { useIsClient } from "@/lib/useIsClient";
@@ -34,6 +34,9 @@ export default function UsagePage() {
   }
 
   const month = monthKeyOf(today);
+  // 이용 기록은 하루에 한 번만 남는다(달력도 그렇다).
+  // 그래서 한 달 이용 횟수는 그 달 일수를 넘을 수 없다.
+  const maxCount = daysInMonth(month);
 
   function handleSave() {
     for (const subscription of data.subscriptions) {
@@ -64,6 +67,7 @@ export default function UsagePage() {
       </h1>
       <p className="mt-1 text-sm text-ink-soft">
         기억나는 대로 적어 주세요. 비워 두면 달력에 남긴 기록을 그대로 씁니다.
+        하루에 한 번까지만 세므로 최대 {maxCount}회입니다.
       </p>
 
       {data.subscriptions.length === 0 ? (
@@ -101,13 +105,17 @@ export default function UsagePage() {
                         type="number"
                         inputMode="numeric"
                         min={0}
+                        max={maxCount}
                         value={value}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            [subscription.id]: event.target.value,
-                          })
-                        }
+                        onChange={(event) => {
+                          const typed = event.target.value;
+                          // 직접 타이핑해서 넘기는 것도 막는다.
+                          const capped =
+                            typed === "" || Number(typed) <= maxCount
+                              ? typed
+                              : String(maxCount);
+                          setDraft({ ...draft, [subscription.id]: capped });
+                        }}
                         placeholder={String(loggedCount)}
                         className="w-20 rounded-lg bg-white px-2 py-1 text-right text-lg text-ink outline-none"
                       />

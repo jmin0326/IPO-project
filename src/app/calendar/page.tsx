@@ -60,18 +60,21 @@ export default function CalendarPage() {
     const list = usageByDate.get(log.date) ?? [];
     list.push({
       subscriptionId: subscription.id,
-      name: serviceName(subscription.serviceId),
+      name: subscription.customName ?? serviceName(subscription.serviceId),
       color: serviceColor(subscription.serviceId),
     });
     usageByDate.set(log.date, list);
   }
 
+  // 결제일은 아직 쓰고 있는 구독만 찍는다. 해지했으면 더 빠져나가지 않는다.
   const billingByDay = new Map<number, CalendarBilling[]>();
-  for (const subscription of data.subscriptions) {
+  for (const subscription of data.subscriptions.filter(
+    (item) => item.endedOn === null,
+  )) {
     const day = billingDayInMonth(subscription.billingDay, viewMonth);
     const list = billingByDay.get(day) ?? [];
     list.push({
-      name: serviceName(subscription.serviceId),
+      name: subscription.customName ?? serviceName(subscription.serviceId),
       price: subscription.monthlyPrice,
     });
     billingByDay.set(day, list);
@@ -171,19 +174,37 @@ export default function CalendarPage() {
                         item.date === selectedDate,
                     );
 
+                    // 해지한 구독은 해지한 날 이후로는 더 기록할 수 없다.
+                    // 다만 그 전 기록은 그대로 보이고 지울 수도 있다.
+                    const closed =
+                      subscription.endedOn !== null &&
+                      selectedDate > subscription.endedOn;
+
                     return (
                       <li key={subscription.id} className="flex items-center gap-2">
                         <button
                           type="button"
+                          disabled={closed}
                           onClick={() => toggleUsageLog(subscription.id, selectedDate)}
+                          title={
+                            closed
+                              ? `${subscription.endedOn}에 해지해서 이 날은 기록할 수 없습니다`
+                              : undefined
+                          }
                           className={`flex flex-1 items-center gap-2 rounded-xl border px-2 py-1.5 text-left text-sm transition ${
-                            log
-                              ? "border-transparent bg-diag font-semibold text-diag-ink"
-                              : "border-zinc-200 bg-white text-ink-soft"
+                            closed
+                              ? "border-transparent bg-page text-ink-soft opacity-50"
+                              : log
+                                ? "border-transparent bg-diag font-semibold text-diag-ink"
+                                : "border-zinc-200 bg-white text-ink-soft"
                           }`}
                         >
                           <ServiceTile serviceId={subscription.serviceId} size="sm" />
-                          {serviceName(subscription.serviceId)}
+                          {subscription.customName ??
+                            serviceName(subscription.serviceId)}
+                          {closed && (
+                            <span className="ml-auto text-[10px]">해지함</span>
+                          )}
                         </button>
 
                         {log && (

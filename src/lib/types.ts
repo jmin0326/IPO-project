@@ -18,6 +18,18 @@ export type Subscription = {
   monthlyPrice: number;
   /** 결제일 (매월 며칠) */
   billingDay: number;
+  /**
+   * 해지한 날 ("YYYY-MM-DD"). 아직 쓰고 있으면 null.
+   *
+   * 해지해도 행을 지우지 않는 이유: 지우면 몇 달치 이용 기록이 같이 날아간다.
+   * 그만 쓰기 시작한 날을 적어 두는 쪽이 사실에 가깝고,
+   * 나중에 다시 가입할지 판단할 근거도 남는다.
+   */
+  endedOn: string | null;
+  /** 목록에 없어서 직접 입력한 경우의 이름. 목록에 있는 서비스면 null */
+  customName: string | null;
+  /** 직접 입력한 경우의 카테고리 */
+  customCategory: string | null;
 };
 
 /**
